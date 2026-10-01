@@ -6,6 +6,9 @@
 
 import { disassemble, format, parse, parsePartial, PostcodeFormatError, SEGMENT_ORDER, type Segments } from './format'
 import { NIGERIA_BBOX, TEST_POSTCODES } from './data'
+import { docsPage } from './docs'
+import { RATE_LIMIT, RESERVED_KEYS } from './keys'
+import { mockOpenApi } from './openapi'
 import {
   administrativeAddress, buildingUse, otherBuildingInfo, pointGeometry, postcodeAt, recentAddress,
   round, stateName,
@@ -17,27 +20,7 @@ import type {
 
 export { TEST_POSTCODES } from './data'
 
-/**
- * Reserved API keys. Send one in `X-API-Key` to make the mock behave as the real gateway would in
- * that situation. Any other key, or no key at all, gets full access at every level, so nobody
- * needs an account to try the API. This is a static list; the mock keeps no state.
- */
-export const RESERVED_KEYS = {
-  /** 401: the key is not recognised. */
-  invalid: 'mock_invalid',
-  /** 401: behave as the real gateway does today when no key is sent. */
-  noKey: 'mock_no_key',
-  /** 402 on credit-consuming calls (Lookup L2+). */
-  noCredits: 'mock_no_credits',
-  /** 403 on Lookup L2+: the key lacks the lookup scope. */
-  noScope: 'mock_no_scope',
-  /** 429 on every call. */
-  rateLimited: 'mock_rate_limited',
-  /** `mock_level_1` … `mock_level_5`: caps lookups at that level, as an organisation's granted level does. */
-  levelPrefix: 'mock_level_',
-} as const
-
-export const RATE_LIMIT = 600
+export { RATE_LIMIT, RESERVED_KEYS } from './keys'
 
 /** The spec clamps reverse search at 250m. Nearby has no published ceiling; the widget variant's 300m is used. */
 const REVERSE_MAX_M = 250
@@ -368,6 +351,7 @@ const NOTICE = {
   docs: 'https://docs.postcode.gov.ng',
   source: 'https://github.com/poliha/ng-postcode',
   try: '/v1/lookup?code=LA-11-W06-TC-10&level=3',
+  openapi: '/openapi.json',
   reserved_keys: RESERVED_KEYS,
   test_postcodes: TEST_POSTCODES,
 }
@@ -394,7 +378,14 @@ export const handleRequest = (req: MockRequest): MockResponse => {
   const path = url.pathname.replace(/\/+$/, '') || '/'
 
   if (path === '/') {
+    const accept = headerValue(req.headers, 'Accept') ?? ''
+    if (accept.includes('text/html')) {
+      return { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8', 'X-Mock': 'true' }, body: docsPage() }
+    }
     return respond({ status: 200, body: { ...NOTICE, mock: true } })
+  }
+  if (path === '/openapi.json') {
+    return respond({ status: 200, body: mockOpenApi() })
   }
   if (path === '/healthz') {
     return { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Mock': 'true' }, body: 'ok' }

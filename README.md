@@ -32,6 +32,11 @@ curl "https://ng-postcode.oliha.dev/v1/lookup?code=LA-11-W06-TC-10&level=3"
 Every body the mock sends carries `"mock": true` beside `data` or `error`, and every response has an
 `X-Mock: true` header. The real API sends neither.
 
+Open https://ng-postcode.oliha.dev in a browser to explore every endpoint and call it from the
+page (Swagger UI). The mock's own OpenAPI spec is at
+[`/openapi.json`](https://ng-postcode.oliha.dev/openapi.json); a test checks every response
+against it.
+
 Or run it locally, on the same port NIPOST's docs use for a local gateway:
 
 ```bash
