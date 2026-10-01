@@ -21,3 +21,16 @@ export const RESERVED_KEYS = {
 } as const
 
 export const RATE_LIMIT = 600
+
+/** Every reserved key with what it does, in the order the docs list them. */
+export const RESERVED_KEY_BEHAVIOUR: readonly { key: string, behaviour: string }[] = [
+  ...[1, 2, 3, 4, 5].map(level => ({
+    key: `${RESERVED_KEYS.levelPrefix}${level}`,
+    behaviour: `Lookups capped at level ${level}; asking for more returns the fields up to L${level}`,
+  })),
+  { key: RESERVED_KEYS.noCredits, behaviour: '402 `insufficient_credits` on Lookup L2+' },
+  { key: RESERVED_KEYS.noScope, behaviour: '403 `insufficient_scope` on Lookup L2+' },
+  { key: RESERVED_KEYS.rateLimited, behaviour: '429 `rate_limited` on every call' },
+  { key: RESERVED_KEYS.invalid, behaviour: '401 `invalid_api_key`' },
+  { key: RESERVED_KEYS.noKey, behaviour: '401 `auth_required`, as the real gateway answers today with no key' },
+]

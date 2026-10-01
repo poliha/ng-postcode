@@ -119,11 +119,15 @@ Your production code keeps calling the real URL; the handlers answer instead. Pa
 ## Reserved keys
 
 Any key, or no key, gets full access at every level. To exercise your error handling, send one of
-these in `X-API-Key`:
+these in `X-API-Key` (on the docs page, pick it from the dropdown on any endpoint):
 
 | Key | Behaviour |
 |---|---|
-| `mock_level_1` to `mock_level_5` | Lookups are capped at that level, as an organisation's granted level caps them |
+| `mock_level_1` | Lookups capped at level 1; asking for more returns the fields up to L1 |
+| `mock_level_2` | Lookups capped at level 2; asking for more returns the fields up to L2 |
+| `mock_level_3` | Lookups capped at level 3; asking for more returns the fields up to L3 |
+| `mock_level_4` | Lookups capped at level 4; asking for more returns the fields up to L4 |
+| `mock_level_5` | Lookups capped at level 5; asking for more returns the fields up to L5 |
 | `mock_no_credits` | `402 insufficient_credits` on Lookup L2+ |
 | `mock_no_scope` | `403 insufficient_scope` on Lookup L2+ |
 | `mock_rate_limited` | `429 rate_limited` on every call, with `Retry-After: 60` |

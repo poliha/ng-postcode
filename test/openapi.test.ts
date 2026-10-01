@@ -67,6 +67,34 @@ describe('the mock matches its own spec', () => {
     ])
   })
 
+  it('offers the key dropdown on every operation, listing every reserved key', () => {
+    const keys = spec.components.parameters.ApiKey.schema.enum
+    expect(keys).toEqual([
+      'mock_level_1', 'mock_level_2', 'mock_level_3', 'mock_level_4', 'mock_level_5',
+      RESERVED_KEYS.noCredits, RESERVED_KEYS.noScope, RESERVED_KEYS.rateLimited, RESERVED_KEYS.invalid, RESERVED_KEYS.noKey,
+    ])
+    for (const [path, operations] of Object.entries<Record<string, { parameters?: { $ref?: string }[] }>>(spec.paths)) {
+      for (const [method, operation] of Object.entries(operations)) {
+        const refs = (operation.parameters ?? []).map(p => p.$ref)
+        expect(refs, `${method} ${path}`).toContain('#/components/parameters/ApiKey')
+      }
+    }
+  })
+
+  it('lists only keys the mock acts on', () => {
+    const lookup = (key?: string) => {
+      const headers: Record<string, string> = {}
+      if (key) {
+        headers['X-API-Key'] = key
+      }
+      return JSON.stringify(handleRequest({ method: 'GET', url: '/v1/lookup?code=EK01A03FK01&level=5', headers }).body)
+    }
+    const open = lookup()
+    for (const key of spec.components.parameters.ApiKey.schema.enum.filter((k: string) => k !== 'mock_level_5')) {
+      expect(lookup(key), key).not.toEqual(open)
+    }
+  })
+
   it('names itself unofficial and points requests at the mock', () => {
     expect(spec.info.title).toMatch(/unofficial/i)
     expect(spec.servers).toEqual([{ url: '/', description: 'This mock' }])

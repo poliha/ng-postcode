@@ -4,7 +4,7 @@
 // the mock does: reserved keys, the `mock` marker and the guessed nearby shape.
 
 import { version } from '../package.json'
-import { RATE_LIMIT, RESERVED_KEYS } from './keys'
+import { RATE_LIMIT, RESERVED_KEY_BEHAVIOUR, RESERVED_KEYS } from './keys'
 
 const POSTCODE_EXAMPLE = 'LA-11-W06-TC-10'
 
@@ -37,6 +37,8 @@ const okResponse = (data: object, description: string) => {
   return { ...json(envelope(data), description), headers: RATE_HEADERS }
 }
 
+const API_KEY_PARAM = { $ref: '#/components/parameters/ApiKey' }
+
 const AUTH_ERRORS = {
   401: errorResponse(`\`${RESERVED_KEYS.invalid}\` → \`invalid_api_key\`; \`${RESERVED_KEYS.noKey}\` → \`auth_required\``),
   429: errorResponse(`\`${RESERVED_KEYS.rateLimited}\` → \`rate_limited\`, with \`Retry-After: 60\``),
@@ -46,16 +48,11 @@ const DESCRIPTION = `**Unofficial.** A mock of the [NIPOST Postcode API](https:/
 
 Same paths, parameters and response shapes as the real API, built from its public docs and OpenAPI spec. No sign-up: any key, or none, gets every lookup level. Apart from NIPOST's published test postcodes, the data is mock data, labelled \`MOCK\`, and every body carries \`"mock": true\`.
 
-**Reserved keys.** Send one in \`X-API-Key\` to exercise error handling:
+**Reserved keys.** Every endpoint has an \`X-API-Key\` dropdown. Leave it empty for full access at every level, or pick a key to exercise error handling:
 
 | Key | Behaviour |
 |---|---|
-| \`mock_level_1\` … \`mock_level_5\` | Lookups capped at that level |
-| \`${RESERVED_KEYS.noCredits}\` | 402 \`insufficient_credits\` on Lookup L2+ |
-| \`${RESERVED_KEYS.noScope}\` | 403 \`insufficient_scope\` on Lookup L2+ |
-| \`${RESERVED_KEYS.rateLimited}\` | 429 \`rate_limited\` on every call |
-| \`${RESERVED_KEYS.invalid}\` | 401 \`invalid_api_key\` |
-| \`${RESERVED_KEYS.noKey}\` | 401 \`auth_required\`, as the real gateway answers today with no key |
+${RESERVED_KEY_BEHAVIOUR.map(row => `| \`${row.key}\` | ${row.behaviour} |`).join('\n')}
 
 Source and npm package: [github.com/poliha/ng-postcode](https://github.com/poliha/ng-postcode). To switch to the real API, use \`https://api.postcode.gov.ng\` with your own key.`
 
@@ -69,7 +66,6 @@ export const mockOpenApi = () => {
       license: { name: 'MIT', url: 'https://github.com/poliha/ng-postcode/blob/main/LICENSE' },
     },
     servers: [{ url: '/', description: 'This mock' }],
-    security: [{}, { ApiKeyAuth: [] }],
     tags: [
       { name: 'Lookup' },
       { name: 'Search' },
@@ -84,6 +80,7 @@ export const mockOpenApi = () => {
           parameters: [
             { name: 'code', in: 'query', required: true, schema: { type: 'string' }, example: POSTCODE_EXAMPLE, description: 'Any style: `LA-11-W06-TC-10`, `LA 11 W06 TC 10`, `la11w06tc10`' },
             { name: 'level', in: 'query', required: false, schema: { type: 'integer', minimum: 1, maximum: 5, default: 1 }, example: 3 },
+            API_KEY_PARAM,
           ],
           responses: {
             200: okResponse({ $ref: '#/components/schemas/LookupResponse' }, 'Graded attributes. A malformed code returns `valid: false`.'),
@@ -101,6 +98,7 @@ export const mockOpenApi = () => {
           description: 'Suggests the segment being typed, from NIPOST\'s published test postcodes.',
           parameters: [
             { name: 'q', in: 'query', required: true, schema: { type: 'string' }, example: 'EK 01', description: 'Partial postcode, with or without separators' },
+            API_KEY_PARAM,
           ],
           responses: {
             200: okResponse({ $ref: '#/components/schemas/AutocompleteResponse' }, 'Suggestions for the active segment'),
@@ -118,6 +116,7 @@ export const mockOpenApi = () => {
             { name: 'lng', in: 'query', required: true, schema: { type: 'number', minimum: -180, maximum: 180 }, example: 3.3792 },
             { name: 'lat', in: 'query', required: true, schema: { type: 'number', minimum: -90, maximum: 90 }, example: 6.5244 },
             { name: 'max_distance_m', in: 'query', required: false, schema: { type: 'number', minimum: 0, maximum: 250, default: 25 }, description: 'Clamped to 250' },
+            API_KEY_PARAM,
           ],
           responses: {
             200: okResponse({ $ref: '#/components/schemas/ReverseResponse' }, 'Resolved postcode, or `found: false`'),
@@ -135,6 +134,7 @@ export const mockOpenApi = () => {
             { name: 'lng', in: 'query', required: true, schema: { type: 'number', minimum: -180, maximum: 180 }, example: 7.4951 },
             { name: 'lat', in: 'query', required: true, schema: { type: 'number', minimum: -90, maximum: 90 }, example: 9.0579 },
             { name: 'radius', in: 'query', required: false, schema: { type: 'number', exclusiveMinimum: 0, maximum: 300, default: 300 }, description: 'Clamped to 300' },
+            API_KEY_PARAM,
           ],
           responses: {
             200: okResponse({ $ref: '#/components/schemas/NearbyResponse' }, 'Units within the radius'),
@@ -147,6 +147,7 @@ export const mockOpenApi = () => {
         post: {
           tags: ['Assembly'],
           summary: 'Assemble segments into a canonical postcode',
+          parameters: [API_KEY_PARAM],
           requestBody: {
             required: true,
             content: {
@@ -169,6 +170,7 @@ export const mockOpenApi = () => {
           summary: 'Disassemble a postcode into segments',
           parameters: [
             { name: 'code', in: 'query', required: true, schema: { type: 'string' }, example: 'EK01A03FK01' },
+            API_KEY_PARAM,
           ],
           responses: {
             200: okResponse({ $ref: '#/components/schemas/Segments' }, 'Segments'),
@@ -179,8 +181,14 @@ export const mockOpenApi = () => {
       },
     },
     components: {
-      securitySchemes: {
-        ApiKeyAuth: { type: 'apiKey', in: 'header', name: 'X-API-Key', description: 'Optional. Any value works; reserved keys trigger errors.' },
+      parameters: {
+        ApiKey: {
+          name: 'X-API-Key',
+          in: 'header',
+          required: false,
+          description: 'Optional. Empty means full access; a reserved key triggers its behaviour. The real API takes your key in this same header.',
+          schema: { type: 'string', enum: RESERVED_KEY_BEHAVIOUR.map(row => row.key) },
+        },
       },
       schemas: {
         Segments: {
