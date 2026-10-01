@@ -1,0 +1,118 @@
+{
+  "name": "ng-postcode",
+  "version": "0.1.0",
+  "description": "Validate and format Nigerian postcodes offline, and mock the NIPOST Postcode API for development and tests. Unofficial.",
+  "keywords": [
+    "nigeria",
+    "postcode",
+    "nipost",
+    "address",
+    "mock",
+    "msw"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/poliha/ng-postcode.git"
+  },
+  "license": "MIT",
+  "author": "Peter Oliha",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./mock": {
+      "import": {
+        "types": "./dist/mock.d.ts",
+        "default": "./dist/mock.js"
+      },
+      "require": {
+        "types": "./dist/mock.d.cts",
+        "default": "./dist/mock.cjs"
+      }
+    },
+    "./msw": {
+      "import": {
+        "types": "./dist/msw.d.ts",
+        "default": "./dist/msw.js"
+      },
+      "require": {
+        "types": "./dist/msw.d.cts",
+        "default": "./dist/msw.cjs"
+      }
+    },
+    "./server": {
+      "import": {
+        "types": "./dist/server.d.ts",
+        "default": "./dist/server.js"
+      },
+      "require": {
+        "types": "./dist/server.d.cts",
+        "default": "./dist/server.cjs"
+      }
+    }
+  },
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.cts",
+  "bin": {
+    "ng-postcode-mock": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsup",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/cli.js",
+    "prepack": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build"
+  },
+  "peerDependencies": {
+    "msw": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "msw": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "@types/node": "^22.0.0",
+    "ajv": "^8.20.0",
+    "eslint": "^10.11.0",
+    "msw": "^2.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "~5.9.0",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^3.0.0",
+    "yaml": "^2.9.1"
+  },
+  "packageManager": "pnpm@10.32.1",
+  "typesVersions": {
+    "*": {
+      "mock": [
+        "./dist/mock.d.ts"
+      ],
+      "msw": [
+        "./dist/msw.d.ts"
+      ],
+      "server": [
+        "./dist/server.d.ts"
+      ]
+    }
+  }
+}

@@ -1,0 +1,408 @@
+openapi: 3.1.0
+info:
+  title: NIPOST Postcode Gateway — Public API
+  version: 0.1.0
+  description: >
+    Public API for Nigeria's national postcode system. Search and Lookup L1 are free;
+    Lookup L2–L4 are commercial (credits); L5 is restricted. Authenticate with an API key.
+servers:
+  - url: https://api.postcode.gov.ng
+    description: Production
+  - url: http://localhost:8081
+    description: Local gateway
+security:
+  - ApiKeyAuth: []
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      security: []
+      responses:
+        "200": { description: OK }
+
+  /v1/assembly/assemble:
+    post:
+      summary: Assemble segments into a canonical postcode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/Segments" }
+      responses:
+        "200":
+          description: Assembled postcode
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      postcode: { type: string, example: "EK-01-A03-FK-01" }
+                      display: { type: string, example: "EK 01 A03 FK 01" }
+                      compact: { type: string, example: "EK01A03FK01" }
+
+  /v1/assembly/disassemble:
+    get:
+      summary: Disassemble a postcode into segments
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Segments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/Segments" }
+
+  /v1/search/autocomplete:
+    get:
+      summary: Segment-aware autocomplete
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string }, description: "Partial postcode, e.g. 'EK 01 A'" }
+      responses:
+        "200":
+          description: Suggestions for the active segment
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      segment: { type: string, enum: [state, lga, district, area, unit] }
+                      suggestions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            code: { type: string }
+                            label: { type: string }
+
+  /v1/search/nearby:
+    get:
+      summary: Location search
+      description: Returns units within a specified radius (default 300m)
+      parameters:
+        - { name: lng, in: query, required: true, schema: { type: number } }
+        - { name: lat, in: query, required: true, schema: { type: number } }
+        - { name: radius, in: query, required: false, schema: { type: number, default: 300 } }
+      responses:
+        "200": { description: Units with distances }
+
+  /v1/search/reverse:
+    get:
+      summary: Reverse geocode
+      description: >-
+        Resolves a coordinate to the postcode of the nearest active unit within
+        a specified radius (default 25m, max 250m).
+        Returns the full unit code plus the derived area/district/state hierarchy
+        and a distance-graded confidence.
+        Administrative names are included only for keys granted lookup level 2+.
+      parameters:
+        - { name: lng, in: query, required: true, schema: { type: number } }
+        - { name: lat, in: query, required: true, schema: { type: number } }
+        - { name: max_distance_m, in: query, required: false, schema: { type: number, minimum: 0, maximum: 250, default: 25 }, description: "Search radius for this call. Honored as asked, tighter or looser than the 25m default, but silently clamped to the 250m hard ceiling if it asks for more than that -- see radius_m on the response for what was actually applied." }
+      responses:
+        "200":
+          description: Resolved postcode (found=false when nothing is within range)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/ReverseResponse" }
+
+  /v1/lookup:
+    get:
+      summary: Graded postcode lookup (levels 1–5, cumulative)
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: level, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 5, default: 1 } }
+      responses:
+        "200":
+          description: Graded attributes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/LookupResponse" }
+
+  /v1/widget/session:
+    post:
+      summary: Start an embeddable-widget session
+      description: >-
+        Exchanges a publishable key + user identifier (NIN or email) for a
+        short-lived widget token. Always responds 200 with a token; an unknown
+        identifier yields a valid session that simply has zero bookmarks, so
+        callers cannot probe which identifiers exist. Served by the platform
+        host, not the gateway.
+      servers:
+        - { url: https://platform.postcode.gov.ng, description: Production platform }
+        - { url: http://localhost:8082, description: Local platform }
+      security:
+        - PublishableKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier_type, identifier]
+              properties:
+                identifier_type: { type: string, enum: [nin, email] }
+                identifier: { type: string, example: "ada@example.com" }
+      responses:
+        "200":
+          description: Widget session token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/WidgetSession" }
+        "401": { description: "Missing, invalid or revoked publishable key" }
+        "402": { description: Insufficient credits }
+        "403": { description: "Key is not publishable/widget-scoped, or origin not allowed" }
+        "422": { description: Bad identifier_type or empty identifier }
+        "429": { description: Rate limited }
+
+  /v1/widget/bookmarks:
+    get:
+      summary: List the session user's bookmarked postcodes
+      description: >-
+        Minimal fields only. A session for an unknown identifier returns an
+        empty list. Served by the platform host, not the gateway.
+      servers:
+        - { url: https://platform.postcode.gov.ng, description: Production platform }
+        - { url: http://localhost:8082, description: Local platform }
+      security:
+        - WidgetToken: []
+      responses:
+        "200":
+          description: Bookmarks, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      bookmarks:
+                        type: array
+                        items: { $ref: "#/components/schemas/WidgetBookmark" }
+        "401": { description: Missing or invalid widget token }
+        "429": { description: Rate limited }
+
+  /v1/widget/lookup:
+    get:
+      summary: Lookup postcode (widget)
+      description: >-
+        Grades a picked postcode for the widget's selection payload: validity,
+        admin names, recent house address, and building use (fixed level 3 —
+        never geometry). Widget-session only; the publishable key's granted
+        lookup level does not apply, and no lookup credit is metered beyond the
+        session. Served by the platform host, not the gateway.
+      servers:
+        - { url: https://platform.postcode.gov.ng, description: Production platform }
+        - { url: http://localhost:8082, description: Local platform }
+      security:
+        - WidgetToken: []
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string }, description: "Postcode, compact or dashed" }
+      responses:
+        "200":
+          description: Graded lookup (status not_found/invalid/restricted when not selectable)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/LookupResponse" }
+        "400": { description: Missing code }
+        "401": { description: Missing or invalid widget token }
+        "429": { description: Rate limited }
+
+  /v1/widget/reverse:
+    get:
+      summary: Reverse geocode (widget)
+      description: >-
+        Resolves a device coordinate to the nearest postcode, including admin
+        names and the building's point geometry. Drives discover's live
+        resolution. Widget-session only — the geometry it returns is NOT
+        available through the public gateway with a publishable key. Served by
+        the platform host, not the gateway.
+      servers:
+        - { url: https://platform.postcode.gov.ng, description: Production platform }
+        - { url: http://localhost:8082, description: Local platform }
+      security:
+        - WidgetToken: []
+      parameters:
+        - { name: lat, in: query, required: true, schema: { type: number } }
+        - { name: lng, in: query, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: Nearest postcode with point geometry (found=false when nothing is within range)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: "#/components/schemas/ReverseResponse" }
+        "400": { description: Missing lat/lng }
+        "401": { description: Missing or invalid widget token }
+        "429": { description: Rate limited }
+
+  /v1/widget/nearby:
+    get:
+      summary: Nearby postcodes (widget)
+      description: >-
+        Postcodes within a small radius of a device coordinate, each with point
+        geometry, for discover's tappable map markers. The SDK queries only
+        around the user's resolved GPS position; the radius is clamped
+        server-side (≤ 300 m). Widget-session only. Served by the platform host,
+        not the gateway.
+      servers:
+        - { url: https://platform.postcode.gov.ng, description: Production platform }
+        - { url: http://localhost:8082, description: Local platform }
+      security:
+        - WidgetToken: []
+      parameters:
+        - { name: lat, in: query, required: true, schema: { type: number } }
+        - { name: lng, in: query, required: true, schema: { type: number } }
+        - { name: radius, in: query, required: false, schema: { type: number, default: 300, maximum: 300 } }
+      responses:
+        "200": { description: Nearby postcodes with point geometry under data.results }
+        "400": { description: Missing lat/lng }
+        "401": { description: Missing or invalid widget token }
+        "429": { description: Rate limited }
+
+  /v1/widget/selected:
+    post:
+      summary: Record the postcode the user selected
+      description: >-
+        Fire-and-forget analytics for the host integration. Served by the
+        platform host, not the gateway.
+      servers:
+        - { url: https://platform.postcode.gov.ng, description: Production platform }
+        - { url: http://localhost:8082, description: Local platform }
+      security:
+        - WidgetToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [postcode]
+              properties:
+                postcode: { type: string, example: "EK-01-A03-FK-01", description: The selected postcode (compact or formatted) }
+                source: { type: string, enum: [bookmark, search, discover], description: How the user found it }
+      responses:
+        "200": { description: Recorded }
+        "400": { description: Missing postcode }
+        "401": { description: Missing or invalid widget token }
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    PublishableKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Publishable key (nipost_pk_…) with the widget scope
+    WidgetToken:
+      type: http
+      scheme: bearer
+      description: Short-lived widget session JWT from POST /v1/widget/session
+  schemas:
+    Segments:
+      type: object
+      required: [state, lga, district, area, unit]
+      properties:
+        state: { type: string, example: "EK" }
+        lga: { type: string, example: "01" }
+        district: { type: string, example: "A03" }
+        area: { type: string, example: "FK" }
+        unit: { type: string, example: "01" }
+    LookupResponse:
+      type: object
+      properties:
+        postcode: { type: string }
+        valid: { type: boolean }
+        administrative_address: { type: object, description: "L2+" }
+        recent_house_address: { type: object, description: "L2+" }
+        building_use_status: { type: string, description: "L3+" }
+        other_building_info: { type: object, description: "L4+" }
+        point_geometry: { type: object, description: "L5" }
+    WidgetSession:
+      type: object
+      properties:
+        token: { type: string, description: Bearer token for the widget endpoints }
+        expires_in: { type: integer, example: 900, description: Seconds until expiry }
+    WidgetBookmark:
+      type: object
+      properties:
+        postcode: { type: string, example: "EK-01-A03-FK-01" }
+        label: { type: string, example: "Home" }
+    PostcodeSelection:
+      type: object
+      description: >-
+        The single cross-platform payload every widget SDK delivers to its host
+        app on selection (version 1). segments/names fields beyond the selection's
+        precision are null; address is the recent house address when known.
+      required: [version, postcode, formatted, address]
+      properties:
+        version: { type: integer, example: 1 }
+        postcode: { type: string, example: "FC02A09DB09", description: Compact canonical code }
+        formatted: { type: string, example: "FC-02-A09-DB-09" }
+        segments:
+          type: object
+          properties:
+            state: { type: [string, "null"], example: "FC" }
+            lga: { type: [string, "null"], example: "02" }
+            district: { type: [string, "null"], example: "A09" }
+            area: { type: [string, "null"], example: "DB" }
+            unit: { type: [string, "null"], example: "09" }
+        names:
+          type: object
+          properties:
+            state: { type: [string, "null"] }
+            lga: { type: [string, "null"] }
+            district: { type: [string, "null"] }
+            area: { type: [string, "null"] }
+        address: { type: [string, "null"], description: "Recent house address of the postcode, when known" }
+    ReverseResponse:
+      type: object
+      properties:
+        found: { type: boolean }
+        coordinate:
+          type: array
+          items: { type: number }
+          description: "[lng, lat] echoed back"
+        unit:
+          type: object
+          description: Nearest building within the snap radius (omitted when found=false)
+          properties:
+            postcode: { type: string, example: "EK-01-A03-FK-01" }
+            display: { type: string, example: "EK 01 A03 FK 01" }
+            distance_m: { type: number }
+            confidence: { type: string, enum: [high, medium, low] }
+            state_name: { type: string, description: "L2+" }
+            lga_name: { type: string, description: "L2+" }
+            locality_name: { type: string, description: "L2+" }
+            address: { type: string, description: "Recent house address (L2+)" }
+        area: { type: string, example: "EK-01-A03-FK" }
+        district: { type: string, example: "EK-01-A03" }
+        state: { type: string, example: "EK" }
+        message: { type: string, description: "set when found=false" }
+        radius_m: { type: number, description: "The radius actually enforced for this call -- the 25m default, the caller's own max_distance_m, or 250m if that asked for more than the ceiling. Always set, even when found=false." }
