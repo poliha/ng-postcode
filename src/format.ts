@@ -56,7 +56,8 @@ export class PostcodeFormatError extends Error {
  */
 const upperAscii = (value: string): string => value.replace(/[a-z]/g, c => c.toUpperCase())
 
-const normaliseSegment = (name: SegmentName, raw: unknown): string => {
+/** Upper-cases and zero-fills one segment. Throws PostcodeFormatError when it is invalid. */
+export const normaliseSegment = (name: SegmentName, raw: unknown): string => {
   if (typeof raw !== 'string' && typeof raw !== 'number') {
     throw new PostcodeFormatError(`${name} is required`, name)
   }

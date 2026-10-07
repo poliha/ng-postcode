@@ -2,9 +2,14 @@
 // tests stay stable. Anything that would be a real-world fact NIPOST has not published (LGA
 // names, street addresses, building use, coordinates) is mock data, and the text values say so.
 
-import { format, type Segments } from './format'
-import { KNOWN_LGAS, KNOWN_STATES } from './data'
-import type { AdministrativeAddress } from './types'
+import { disassemble, format, type Segments } from './format'
+import { KNOWN_LGAS, KNOWN_STATES, SANDBOX_POSTCODES, TEST_POSTCODES } from './data'
+import type { AdministrativeAddress, NamedCode } from './types'
+
+const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+
+/** LGAs per state in the mock, 01 to 40: the range postcodeAt draws from, so its LGAs are always listed. */
+export const MOCK_LGA_COUNT = 40
 
 /** FNV-1a: small, fast and stable across platforms. */
 export const hash = (input: string): number => {
@@ -14,6 +19,10 @@ export const hash = (input: string): number => {
     h = Math.imul(h, 0x01000193)
   }
   return h >>> 0
+}
+
+const twoDigits = (n: number): string => {
+  return String(n).padStart(2, '0')
 }
 
 export const pick = <T>(items: ArrayLike<T>, seed: number): T => {
@@ -33,8 +42,13 @@ export const stateName = (state: string): string => {
   return `MOCK STATE ${state}`
 }
 
+/** The documented LGA name where NIPOST has published one (EK-01 is ADO EKITI), otherwise mock. */
+export const lgaName = (opts: { state: string, lga: string }): string => {
+  return KNOWN_LGAS[`${opts.state}-${opts.lga}`] ?? `MOCK LGA ${opts.lga}`
+}
+
 export const administrativeAddress = (s: Segments): AdministrativeAddress => {
-  const lga = KNOWN_LGAS[`${s.state}-${s.lga}`] ?? `MOCK LGA ${s.lga}`
+  const lga = lgaName(s)
   return {
     state_name: stateName(s.state),
     lga_name: lga,
@@ -49,9 +63,16 @@ export const recentAddress = (s: Segments): string => {
 
 const BUILDING_USES = ['residential', 'commercial', 'mixed'] as const
 
-/** Random per postcode. The spec types this as a plain string, so it cannot carry a mock label. */
+/**
+ * Random per postcode. The spec types this as a plain string, so it cannot carry a mock label.
+ * NIPOST describes every sandbox postcode as a public building, so those read `public`.
+ */
 export const buildingUse = (s: Segments): string => {
-  return pick(BUILDING_USES, hash(format(s).compact))
+  const compact = format(s).compact
+  if (SANDBOX_POSTCODES.some(code => format(code).compact === compact)) {
+    return 'public'
+  }
+  return pick(BUILDING_USES, hash(compact))
 }
 
 /** Guessed: NIPOST documents no inner fields for L4 `other_building_info`. */
@@ -96,8 +117,6 @@ export const nearestState = (lng: number, lat: number): string => {
   return best
 }
 
-const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-
 /**
  * A stable, well-formed postcode for a coordinate, used by reverse and nearby search. The state is
  * the nearest known state; the other segments are random.
@@ -107,9 +126,65 @@ export const postcodeAt = (opts: { lng: number, lat: number, salt?: string }): S
   const h2 = hash(`${h}`)
   return {
     state: nearestState(opts.lng, opts.lat),
-    lga: String(1 + (h % 40)).padStart(2, '0'),
+    lga: twoDigits(1 + (h % MOCK_LGA_COUNT)),
     district: pick(ALPHA, h >>> 3) + String((h >>> 7) % 100).padStart(2, '0'),
     area: pick(ALPHA, h2) + pick(ALPHA, h2 >>> 5),
     unit: String(1 + ((h2 >>> 10) % 99)).padStart(2, '0'),
   }
+}
+
+// Reference data (/v1/reference/*). Each list is deterministic per parent and always includes the
+// segments of NIPOST's published postcodes, so drilling down from a state reaches every one of them.
+
+const PUBLISHED: readonly Segments[] = [...TEST_POSTCODES, ...SANDBOX_POSTCODES].map(code => disassemble(code))
+
+/** Four to eight generated values plus the published ones, deduplicated and sorted. */
+const mockList = (opts: { seed: string, make: (h: number) => string, published: string[] }): string[] => {
+  const count = 4 + (hash(`count:${opts.seed}`) % 5)
+  const values = new Set(opts.published)
+  for (let i = 0; i < count; i++) {
+    values.add(opts.make(hash(`${opts.seed}:${i}`)))
+  }
+  return [...values].sort()
+}
+
+/** The known states, by code, with their real names. */
+export const referenceStates = (): NamedCode[] => {
+  return Object.keys(KNOWN_STATES).sort().map(code => ({ code, name: stateName(code) }))
+}
+
+/** LGAs 01 to 40 of a state, named as lookups name them. */
+export const referenceLgas = (state: string): NamedCode[] => {
+  return Array.from({ length: MOCK_LGA_COUNT }, (_, i) => {
+    const lga = twoDigits(i + 1)
+    return { code: lga, name: lgaName({ state, lga }) }
+  })
+}
+
+/** District codes of a state's LGA; empty for an LGA the mock does not list. */
+export const referenceDistricts = (opts: { state: string, lga: string }): NamedCode[] => {
+  if (!referenceLgas(opts.state).some(l => l.code === opts.lga)) {
+    return []
+  }
+  const codes = mockList({
+    seed: `district:${opts.state}-${opts.lga}`,
+    make: h => pick(ALPHA, h) + twoDigits(1 + ((h >>> 5) % 99)),
+    published: PUBLISHED.filter(s => s.state === opts.state && s.lga === opts.lga).map(s => s.district),
+  })
+  return codes.map(code => ({ code }))
+}
+
+/** Area codes of a district; empty for a district the mock does not list. */
+export const referenceAreas = (opts: { state: string, lga: string, district: string }): NamedCode[] => {
+  if (!referenceDistricts(opts).some(d => d.code === opts.district)) {
+    return []
+  }
+  const codes = mockList({
+    seed: `area:${opts.state}-${opts.lga}-${opts.district}`,
+    make: h => pick(ALPHA, h) + pick(ALPHA, h >>> 5),
+    published: PUBLISHED
+      .filter(s => s.state === opts.state && s.lga === opts.lga && s.district === opts.district)
+      .map(s => s.area),
+  })
+  return codes.map(code => ({ code }))
 }

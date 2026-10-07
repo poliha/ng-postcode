@@ -1,6 +1,6 @@
 {
   "source": "https://docs.postcode.gov.ng/api-reference/openapi.yaml",
-  "fetchedAt": "2026-10-01",
-  "sha256": "d61a8a7c2f60636bbd2583d21d9fdd21a59f694d4d266927ab3cc9676064d752",
+  "fetchedAt": "2026-10-06",
+  "sha256": "2f7e9693e21179026f11a672a7ab375e2ceda358c5e75e1a6adfae9f3a90e6b0",
   "note": "Unmodified copy of NIPOST's published spec. It carries no licence field; it is vendored for type and contract checks only."
 }

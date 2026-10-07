@@ -29,6 +29,10 @@ describe('HTTP server', () => {
     const suggestions = await api.autocomplete('EK01')
     const reversed = await api.reverse({ lng: 3.3792, lat: 6.5244, maxDistanceM: 250 })
     const nearby = await api.nearby({ lng: 3.3792, lat: 6.5244 })
+    const states = await api.states()
+    const lgas = await api.lgas('EK')
+    const districts = await api.districts({ state: 'FC', lga: '01' })
+    const areas = await api.areas({ state: 'FC', lga: '01', district: 'A01' })
 
     expect(lookup.administrative_address?.state_name).toBe('LAGOS')
     expect(assembled.postcode).toBe('EK-01-A03-FK-01')
@@ -36,6 +40,15 @@ describe('HTTP server', () => {
     expect(suggestions.segment).toBe('district')
     expect(reversed.radius_m).toBe(250)
     expect(nearby.radius_m).toBe(300)
+    expect(states.states).toHaveLength(11)
+    expect(lgas.lgas[0]).toEqual({ code: '01', name: 'ADO EKITI' })
+    expect(districts.districts).toContainEqual({ code: 'A01' })
+    expect(areas.areas).toContainEqual({ code: 'KP' })
+  })
+
+  it('surfaces a reference 400 as PostcodeApiError', async () => {
+    const api = createPostcodeClient({ baseUrl: base })
+    await expect(api.lgas('ZZ')).rejects.toMatchObject({ status: 400, code: 'invalid_request' })
   })
 
   it('surfaces gateway errors as PostcodeApiError', async () => {
@@ -79,7 +92,7 @@ describe('MSW handlers', () => {
   afterAll(() => msw.close())
 
   it('intercepts calls to the real gateway URL', async () => {
-    const api = createPostcodeClient({ apiKey: 'nipost_test_whatever' })
+    const api = createPostcodeClient({ apiKey: 'nipost_live_whatever' })
     const lookup = await api.lookup('KN-31-F82-WJ-80')
     const assembled = await api.assemble(EK_SEGMENTS)
     expect(lookup).toEqual({ postcode: 'KN-31-F82-WJ-80', valid: true })
@@ -90,6 +103,22 @@ describe('MSW handlers', () => {
     const api = createPostcodeClient({ baseUrl: 'http://gateway.test/api' })
     const lookup = await api.lookup('KN-31-F82-WJ-80')
     expect(lookup.valid).toBe(true)
+  })
+
+  it('applies the sandbox split for a nipost_test_ key', async () => {
+    const api = createPostcodeClient({ apiKey: 'nipost_test_whatever' })
+    const sandbox = await api.lookup('FC-01-A01-MH-01', 5)
+    const sample = await api.lookup('KN-31-F82-WJ-80', 5)
+    expect(sandbox.valid).toBe(true)
+    expect(sample).toEqual({ postcode: 'KN-31-F82-WJ-80', valid: false })
+  })
+
+  it('answers the reference endpoints', async () => {
+    const api = createPostcodeClient({ apiKey: 'nipost_live_whatever' })
+    const states = await api.states()
+    const areas = await api.areas({ state: 'fc', lga: '1', district: 'a01' })
+    expect(states.states.map(s => s.code)).toContain('LA')
+    expect(areas.areas.map(a => a.code)).toEqual(expect.arrayContaining(['KP', 'LR', 'MH', 'MV', 'MW']))
   })
 
   it('applies reserved keys', async () => {

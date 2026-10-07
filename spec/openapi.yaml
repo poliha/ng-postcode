@@ -8,8 +8,6 @@ info:
 servers:
   - url: https://api.postcode.gov.ng
     description: Production
-  - url: http://localhost:8081
-    description: Local gateway
 security:
   - ApiKeyAuth: []
 paths:
@@ -133,6 +131,104 @@ paths:
                 properties:
                   data: { $ref: "#/components/schemas/LookupResponse" }
 
+  /v1/reference/states:
+    get:
+      tags: [Reference]
+      summary: List states
+      description: >-
+        All 37 states with their 2-letter SSLL code and full name. Served from a
+        precomputed catalog (not derived per request); free, no credits consumed.
+      responses:
+        "200":
+          description: Every state (code + name)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      states:
+                        type: array
+                        items: { $ref: "#/components/schemas/NamedCode" }
+
+  /v1/reference/lgas:
+    get:
+      tags: [Reference]
+      summary: List LGAs in a state
+      description: "The LGAs of a state (2-digit code + full name). Free, no credits consumed."
+      parameters:
+        - { name: state, in: query, required: true, schema: { type: string }, description: "2-letter state code, e.g. FC" }
+      responses:
+        "200":
+          description: LGAs of the state (code + name)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      lgas:
+                        type: array
+                        items: { $ref: "#/components/schemas/NamedCode" }
+        "400": { description: "Missing or unknown state" }
+
+  /v1/reference/districts:
+    get:
+      tags: [Reference]
+      summary: List districts in a state+LGA
+      description: >-
+        District (PD) codes under a state+LGA. Districts have no human name — code
+        only. Free, no credits consumed.
+      parameters:
+        - { name: state, in: query, required: true, schema: { type: string }, description: "2-letter state code, e.g. FC" }
+        - { name: lga, in: query, required: true, schema: { type: string }, description: "2-digit LGA code, e.g. 01" }
+      responses:
+        "200":
+          description: District codes under the state+LGA
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      districts:
+                        type: array
+                        items: { $ref: "#/components/schemas/NamedCode" }
+        "400": { description: "Missing/invalid state or lga" }
+
+  /v1/reference/areas:
+    get:
+      tags: [Reference]
+      summary: List areas in a state+LGA+district
+      description: >-
+        Area (PCA) codes under a state+LGA+district. Areas have no human name —
+        code only. Free, no credits consumed.
+      parameters:
+        - { name: state, in: query, required: true, schema: { type: string }, description: "2-letter state code, e.g. FC" }
+        - { name: lga, in: query, required: true, schema: { type: string }, description: "2-digit LGA code, e.g. 01" }
+        - { name: district, in: query, required: true, schema: { type: string }, description: "3-char district code, e.g. A01" }
+      responses:
+        "200":
+          description: Area codes under the state+LGA+district
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      areas:
+                        type: array
+                        items: { $ref: "#/components/schemas/NamedCode" }
+        "400": { description: "Missing/invalid state, lga or district" }
+
   /v1/widget/session:
     post:
       summary: Start an embeddable-widget session
@@ -144,7 +240,6 @@ paths:
         host, not the gateway.
       servers:
         - { url: https://platform.postcode.gov.ng, description: Production platform }
-        - { url: http://localhost:8082, description: Local platform }
       security:
         - PublishableKey: []
       requestBody:
@@ -180,7 +275,6 @@ paths:
         empty list. Served by the platform host, not the gateway.
       servers:
         - { url: https://platform.postcode.gov.ng, description: Production platform }
-        - { url: http://localhost:8082, description: Local platform }
       security:
         - WidgetToken: []
       responses:
@@ -211,7 +305,6 @@ paths:
         session. Served by the platform host, not the gateway.
       servers:
         - { url: https://platform.postcode.gov.ng, description: Production platform }
-        - { url: http://localhost:8082, description: Local platform }
       security:
         - WidgetToken: []
       parameters:
@@ -240,7 +333,6 @@ paths:
         the platform host, not the gateway.
       servers:
         - { url: https://platform.postcode.gov.ng, description: Production platform }
-        - { url: http://localhost:8082, description: Local platform }
       security:
         - WidgetToken: []
       parameters:
@@ -270,7 +362,6 @@ paths:
         not the gateway.
       servers:
         - { url: https://platform.postcode.gov.ng, description: Production platform }
-        - { url: http://localhost:8082, description: Local platform }
       security:
         - WidgetToken: []
       parameters:
@@ -291,7 +382,6 @@ paths:
         platform host, not the gateway.
       servers:
         - { url: https://platform.postcode.gov.ng, description: Production platform }
-        - { url: http://localhost:8082, description: Local platform }
       security:
         - WidgetToken: []
       requestBody:
@@ -325,6 +415,13 @@ components:
       scheme: bearer
       description: Short-lived widget session JWT from POST /v1/widget/session
   schemas:
+    NamedCode:
+      type: object
+      description: A code with an optional full name (districts and areas are code-only).
+      required: [code]
+      properties:
+        code: { type: string, example: "FC" }
+        name: { type: string, example: "Federal Capital Territory" }
     Segments:
       type: object
       required: [state, lga, district, area, unit]

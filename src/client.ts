@@ -6,8 +6,8 @@
 
 import type { Segments } from './format'
 import type {
-  AssembleResponse, AutocompleteResponse, DisassembleResponse, LookupLevel, LookupResponse,
-  NearbyResponse, ReverseResponse,
+  AreasResponse, AssembleResponse, AutocompleteResponse, DisassembleResponse, DistrictsResponse,
+  LgasResponse, LookupLevel, LookupResponse, NearbyResponse, ReverseResponse, StatesResponse,
 } from './types'
 
 export interface ClientOptions {
@@ -98,6 +98,18 @@ export const createPostcodeClient = (options: ClientOptions = {}) => {
     },
     disassemble: (code: string) => {
       return request<DisassembleResponse>({ path: '/v1/assembly/disassemble', query: { code } })
+    },
+    states: () => {
+      return request<StatesResponse>({ path: '/v1/reference/states' })
+    },
+    lgas: (state: string) => {
+      return request<LgasResponse>({ path: '/v1/reference/lgas', query: { state } })
+    },
+    districts: (opts: { state: string, lga: string }) => {
+      return request<DistrictsResponse>({ path: '/v1/reference/districts', query: opts })
+    },
+    areas: (opts: { state: string, lga: string, district: string }) => {
+      return request<AreasResponse>({ path: '/v1/reference/areas', query: opts })
     },
   }
 }

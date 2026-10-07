@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { assemble, disassemble, format, isValidFormat, parse, parsePartial, PostcodeFormatError, TEST_POSTCODES } from '../src/index'
+import {
+  assemble, disassemble, format, isValidFormat, parse, parsePartial, PostcodeFormatError, SANDBOX_POSTCODES,
+  TEST_POSTCODES,
+} from '../src/index'
 
 const EK = { state: 'EK', lga: '01', district: 'A03', area: 'FK', unit: '01' }
 
@@ -16,8 +19,8 @@ describe('format', () => {
     expect(format(input).postcode).toBe('EK-01-A03-FK-01')
   })
 
-  it('parses every published test postcode', () => {
-    for (const code of TEST_POSTCODES) {
+  it('parses every published sample and sandbox postcode', () => {
+    for (const code of [...TEST_POSTCODES, ...SANDBOX_POSTCODES]) {
       expect(parse(code)?.postcode).toBe(code)
     }
   })

@@ -1,6 +1,6 @@
-// Response types for the NIPOST Postcode API, written against spec/openapi.yaml (v0.1.0) and the
-// worked examples in the docs. Where the spec types a field only as `object`, the inner fields
-// come from the docs' examples; fields marked "guessed" have no published shape at all.
+// Response types for the NIPOST Postcode API, written against spec/openapi.yaml (v0.1.0, fetched
+// 2026-10-06) and the worked examples in the docs. Where the spec types a field only as `object`,
+// the inner fields come from the docs' examples; fields marked "guessed" have no published shape.
 
 import type { Segments } from './format'
 
@@ -78,4 +78,30 @@ export interface ReverseResponse {
   /** Set when found is false */
   message?: string
   radius_m: number
+}
+
+/** The spec's `NamedCode`. Districts and areas are code-only, so they carry no `name`. */
+export interface NamedCode {
+  code: string
+  name?: string
+}
+
+/** GET /v1/reference/states. NIPOST lists all 37 states; the mock knows 11 of them. */
+export interface StatesResponse {
+  states: NamedCode[]
+}
+
+/** GET /v1/reference/lgas?state= */
+export interface LgasResponse {
+  lgas: NamedCode[]
+}
+
+/** GET /v1/reference/districts?state=&lga= (code only) */
+export interface DistrictsResponse {
+  districts: NamedCode[]
+}
+
+/** GET /v1/reference/areas?state=&lga=&district= (code only) */
+export interface AreasResponse {
+  areas: NamedCode[]
 }

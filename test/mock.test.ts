@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { handleRequest, RESERVED_KEYS } from '../src/mock'
+import { KNOWN_STATES } from '../src/data'
+import { parse } from '../src/format'
+import { handleRequest, RESERVED_KEYS, SANDBOX_KEY_PREFIX, SANDBOX_POSTCODES, TEST_POSTCODES } from '../src/mock'
 
 const get = (url: string, key?: string) => {
   const headers: Record<string, string> = {}
@@ -64,9 +66,8 @@ describe('lookup', () => {
 })
 
 describe('reserved keys', () => {
-  it('lets any other key, or none, through at every level', () => {
-    expect(Object.keys(data('/v1/lookup?code=EK01A03FK01&level=5'))).toHaveLength(7)
-    expect(Object.keys(data('/v1/lookup?code=EK01A03FK01&level=5', 'nipost_test_anything'))).toHaveLength(7)
+  it.each([undefined, 'nipost_live_anything', 'anything_else', 'mock_level_9'])('lets %s through at every level', (key) => {
+    expect(Object.keys(data('/v1/lookup?code=EK01A03FK01&level=5', key))).toHaveLength(7)
   })
 
   it('caps the level with mock_level_N, as a granted level does', () => {
@@ -79,7 +80,7 @@ describe('reserved keys', () => {
     { key: RESERVED_KEYS.noKey, url: '/v1/search/autocomplete?q=EK', status: 401, code: 'auth_required' },
     { key: RESERVED_KEYS.rateLimited, url: '/v1/lookup?code=EK01A03FK01', status: 429, code: 'rate_limited' },
     { key: RESERVED_KEYS.noCredits, url: '/v1/lookup?code=EK01A03FK01&level=2', status: 402, code: 'insufficient_credits' },
-    { key: RESERVED_KEYS.noScope, url: '/v1/lookup?code=EK01A03FK01&level=3', status: 403, code: 'insufficient_scope' },
+    { key: RESERVED_KEYS.noScope, url: '/v1/lookup?code=EK01A03FK01&level=3', status: 403, code: 'level_not_granted' },
   ])('$key gives the documented error envelope', ({ key, url, status, code }) => {
     const res = get(url, key)
     expect(res.status).toBe(status)
@@ -94,6 +95,176 @@ describe('reserved keys', () => {
   it('sends rate-limit headers, and Retry-After when limited', () => {
     expect(get('/v1/lookup?code=EK01A03FK01').headers).toMatchObject({ 'X-RateLimit-Limit': '600', 'X-Mock': 'true' })
     expect(get('/v1/lookup?code=EK01A03FK01', RESERVED_KEYS.rateLimited).headers).toMatchObject({ 'X-RateLimit-Remaining': '0', 'Retry-After': '60' })
+  })
+})
+
+describe('sandbox keys', () => {
+  const SANDBOX_KEY = `${SANDBOX_KEY_PREFIX}abc123`
+
+  it.each(SANDBOX_POSTCODES)('resolve %s at every level, uncapped', (code) => {
+    const d = data(`/v1/lookup?code=${code}&level=5`, SANDBOX_KEY)
+    expect(d).toMatchObject({ postcode: code, valid: true })
+    expect(Object.keys(d)).toHaveLength(7)
+  })
+
+  it('follow the data rules for published codes: real state, everything below it mock', () => {
+    const d = data('/v1/lookup?code=FC-01-A01-KP-27&level=3', SANDBOX_KEY)
+    expect(d.administrative_address).toMatchObject({ state_name: 'FCT', lga_name: 'MOCK LGA 01' })
+    expect(d.recent_house_address.recent).toContain('MOCK')
+  })
+
+  it('resolve nothing else, the sample postcodes included', () => {
+    for (const code of [...TEST_POSTCODES, 'FC-01-A01-KP-28', 'ZZ-01-A03-FK-01']) {
+      expect(data(`/v1/lookup?code=${code}&level=2`, SANDBOX_KEY), code).toEqual({ postcode: code, valid: false })
+    }
+    expect(data('/v1/lookup?code=NOT-A-CODE', SANDBOX_KEY)).toEqual({ postcode: 'NOT-A-CODE', valid: false })
+  })
+
+  it('accept the sandbox postcodes in any style', () => {
+    expect(data('/v1/lookup?code=fc01a01mw01', SANDBOX_KEY)).toEqual({ postcode: 'FC-01-A01-MW-01', valid: true })
+  })
+
+  it('never consume credits or need a granted level', () => {
+    for (const level of [1, 2, 3, 4, 5]) {
+      expect(get(`/v1/lookup?code=FC-01-A01-LR-01&level=${level}`, SANDBOX_KEY).status).toBe(200)
+    }
+  })
+
+  it('autocomplete from the sandbox postcodes only', () => {
+    expect(data('/v1/search/autocomplete?q=', SANDBOX_KEY).suggestions).toEqual([{ code: 'FC', label: 'FC (FCT)' }])
+    expect(data('/v1/search/autocomplete?q=FC01A01', SANDBOX_KEY).suggestions.map((s: { code: string }) => s.code))
+      .toEqual(['KP', 'LR', 'MH', 'MV', 'MW'])
+  })
+
+  it('do not resolve under a live key', () => {
+    for (const code of SANDBOX_POSTCODES) {
+      expect(data(`/v1/lookup?code=${code}&level=3`, 'nipost_live_abc'), code).toEqual({ postcode: code, valid: false })
+    }
+    expect(data('/v1/lookup?code=LA-11-W06-TC-10', 'nipost_live_abc')).toEqual({ postcode: 'LA-11-W06-TC-10', valid: true })
+  })
+
+  it('read as public buildings, as NIPOST describes them', () => {
+    for (const code of SANDBOX_POSTCODES) {
+      expect(data(`/v1/lookup?code=${code}&level=3`, SANDBOX_KEY).building_use_status, code).toBe('public')
+    }
+  })
+
+  it('leave no key and the reserved keys as they were', () => {
+    expect(data('/v1/lookup?code=FC-01-A01-KP-27')).toEqual({ postcode: 'FC-01-A01-KP-27', valid: true })
+    expect(data('/v1/lookup?code=LA-11-W06-TC-10')).toEqual({ postcode: 'LA-11-W06-TC-10', valid: true })
+    expect(get('/v1/lookup?code=FC-01-A01-KP-27&level=2', RESERVED_KEYS.noCredits).status).toBe(402)
+    expect(get('/v1/lookup?code=FC-01-A01-KP-27', RESERVED_KEYS.noKey).status).toBe(401)
+  })
+
+  it('needs the exact prefix', () => {
+    expect(data('/v1/lookup?code=LA-11-W06-TC-10', 'NIPOST_TEST_abc').valid).toBe(true)
+    expect(data('/v1/lookup?code=LA-11-W06-TC-10', 'x_nipost_test_abc').valid).toBe(true)
+  })
+})
+
+describe('reference data', () => {
+  const PUBLISHED = [...TEST_POSTCODES, ...SANDBOX_POSTCODES].map(code => parse(code)!)
+
+  it('lists the 11 known states, sorted, with their real names', () => {
+    const states = data('/v1/reference/states').states
+    expect(states).toHaveLength(11)
+    expect(states.map((s: { code: string }) => s.code)).toEqual(['AK', 'BA', 'EB', 'EK', 'EN', 'FC', 'JI', 'KN', 'LA', 'NI', 'OG'])
+    for (const s of states) {
+      expect(s.name).toBe(KNOWN_STATES[s.code]!.name)
+    }
+  })
+
+  it('lists LGAs 01 to 40, named as lookups name them', () => {
+    const lgas = data('/v1/reference/lgas?state=LA').lgas
+    expect(lgas).toHaveLength(40)
+    expect(lgas[0]).toEqual({ code: '01', name: 'MOCK LGA 01' })
+    expect(lgas[39]).toEqual({ code: '40', name: 'MOCK LGA 40' })
+    const lookupName = data('/v1/lookup?code=LA-11-W06-TC-10&level=2').administrative_address.lga_name
+    expect(lgas.find((l: { code: string }) => l.code === '11').name).toBe(lookupName)
+    expect(data('/v1/reference/lgas?state=EK').lgas[0]).toEqual({ code: '01', name: 'ADO EKITI' })
+  })
+
+  it('lists districts and areas as codes only, well-formed, sorted and deterministic', () => {
+    const districts = data('/v1/reference/districts?state=KN&lga=07').districts
+    const areas = data(`/v1/reference/areas?state=KN&lga=07&district=${districts[0].code}`).areas
+    expect(districts.length).toBeGreaterThanOrEqual(4)
+    expect(areas.length).toBeGreaterThanOrEqual(4)
+    for (const d of districts) {
+      expect(Object.keys(d)).toEqual(['code'])
+      expect(d.code).toMatch(/^[A-Z]\d{2}$/)
+    }
+    for (const a of areas) {
+      expect(Object.keys(a)).toEqual(['code'])
+      expect(a.code).toMatch(/^[A-Z]{2}$/)
+    }
+    const codes = districts.map((d: { code: string }) => d.code)
+    expect(codes).toEqual([...codes].sort())
+    expect(data('/v1/reference/districts?state=KN&lga=07').districts).toEqual(districts)
+  })
+
+  it('reaches every published postcode by drilling down', () => {
+    for (const p of PUBLISHED) {
+      const lgas = data(`/v1/reference/lgas?state=${p.state}`).lgas.map((l: { code: string }) => l.code)
+      const districts = data(`/v1/reference/districts?state=${p.state}&lga=${p.lga}`).districts.map((d: { code: string }) => d.code)
+      const areas = data(`/v1/reference/areas?state=${p.state}&lga=${p.lga}&district=${p.district}`).areas.map((a: { code: string }) => a.code)
+      expect(lgas, p.postcode).toContain(p.lga)
+      expect(districts, p.postcode).toContain(p.district)
+      expect(areas, p.postcode).toContain(p.area)
+    }
+    expect(data('/v1/reference/areas?state=FC&lga=01&district=A01').areas.map((a: { code: string }) => a.code))
+      .toEqual(expect.arrayContaining(['KP', 'LR', 'MH', 'MV', 'MW']))
+  })
+
+  it('accepts lower case and a missing zero, as Assembly does', () => {
+    expect(data('/v1/reference/districts?state=fc&lga=1')).toEqual(data('/v1/reference/districts?state=FC&lga=01'))
+    expect(data('/v1/reference/areas?state=fc&lga=1&district=a01')).toEqual(data('/v1/reference/areas?state=FC&lga=01&district=A01'))
+  })
+
+  it('gives an empty list below an LGA or district it does not list', () => {
+    expect(data('/v1/reference/districts?state=LA&lga=41').districts).toEqual([])
+    expect(data('/v1/reference/areas?state=LA&lga=41&district=A01').areas).toEqual([])
+    const listed = data('/v1/reference/districts?state=LA&lga=11').districts.map((d: { code: string }) => d.code)
+    const unlisted = ['Z99', 'A00', '999'].find(code => !listed.includes(code))
+    expect(data(`/v1/reference/areas?state=LA&lga=11&district=${unlisted}`).areas).toEqual([])
+  })
+
+  it.each([
+    '/v1/reference/lgas',
+    '/v1/reference/lgas?state=',
+    '/v1/reference/lgas?state=ZZ',
+    '/v1/reference/lgas?state=KD',
+    '/v1/reference/lgas?state=LAG',
+    '/v1/reference/districts?state=LA',
+    '/v1/reference/districts?lga=11',
+    '/v1/reference/districts?state=LA&lga=00',
+    '/v1/reference/districts?state=LA&lga=ab',
+    '/v1/reference/districts?state=ZZ&lga=11',
+    '/v1/reference/areas?state=LA&lga=11',
+    '/v1/reference/areas?state=LA&lga=11&district=W6',
+    '/v1/reference/areas?state=ZZ&lga=11&district=W06',
+  ])('rejects %s with the error envelope', (url) => {
+    const res = get(url)
+    expect(res.status).toBe(400)
+    expect(res.body).toMatchObject({ error: { code: 'invalid_request' }, mock: true })
+  })
+
+  it('names the known states when it rejects an unknown one', () => {
+    expect((get('/v1/reference/lgas?state=KD').body as { error: { message: string } }).error.message).toMatch(/11 of NIPOST's 37/)
+  })
+
+  it('applies the same key handling as the other free endpoints, and never charges', () => {
+    expect(get('/v1/reference/states', RESERVED_KEYS.invalid).status).toBe(401)
+    expect(get('/v1/reference/states', RESERVED_KEYS.noKey).status).toBe(401)
+    expect(get('/v1/reference/lgas?state=LA', RESERVED_KEYS.rateLimited).status).toBe(429)
+    for (const key of [RESERVED_KEYS.noCredits, RESERVED_KEYS.noScope, 'mock_level_1', 'nipost_test_x', 'nipost_live_x']) {
+      expect(data('/v1/reference/areas?state=FC&lga=01&district=A01', key), key).toEqual(data('/v1/reference/areas?state=FC&lga=01&district=A01'))
+    }
+  })
+
+  it('marks every body as mock, and only answers GET', () => {
+    expect(get('/v1/reference/states').body).toMatchObject({ mock: true })
+    expect(get('/v1/reference/states').headers['X-Mock']).toBe('true')
+    expect(handleRequest({ method: 'POST', url: '/v1/reference/states' }).status).toBe(405)
   })
 })
 

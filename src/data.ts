@@ -2,8 +2,9 @@
 // anything the mock has to make up is generated in synth.ts and labelled as mock data.
 
 /**
- * The real, active test postcodes NIPOST publishes on its Lookup levels page, plus the
- * worked example used throughout its docs (EK-01-A03-FK-01).
+ * The 20 real, active postcodes NIPOST publishes on its Lookup levels page (its "sample
+ * postcodes", which resolve under a live key), plus the worked example from its quickstart
+ * (EK-01-A03-FK-01). The 20 cover 10 states; the example adds EK, the 11th.
  */
 export const TEST_POSTCODES: readonly string[] = [
   'EK-01-A03-FK-01',
@@ -29,12 +30,26 @@ export const TEST_POSTCODES: readonly string[] = [
   'OG-14-M82-QA-09',
 ]
 
+/**
+ * NIPOST's sandbox postcodes, the only codes a sandbox key (`nipost_test_…`) resolves. NIPOST
+ * describes each only as "Public building (FCT)", so the mock treats them like the sample
+ * postcodes: real state, everything below it mock data.
+ */
+export const SANDBOX_POSTCODES: readonly string[] = [
+  'FC-01-A01-KP-27',
+  'FC-01-A01-LR-01',
+  'FC-01-A01-MH-01',
+  'FC-01-A01-MV-01',
+  'FC-01-A01-MW-01',
+]
+
 export type Zone = 'NORTH CENTRAL' | 'NORTH EAST' | 'NORTH WEST' | 'SOUTH EAST' | 'SOUTH SOUTH' | 'SOUTH WEST'
 
 /**
- * State codes confirmed by NIPOST's docs (each appears in a published test postcode), with the
+ * The 11 state codes confirmed by NIPOST's docs (each appears in a published postcode), with the
  * state name, geopolitical zone and a rough centre point as [lng, lat]. Other two-letter codes are
  * well-formed but unconfirmed, so the mock answers for them with clearly labelled placeholders.
+ * NIPOST has 37 states; the mock knows only these.
  */
 export const KNOWN_STATES: Readonly<Record<string, { name: string, zone: Zone, centre: [number, number] }>> = {
   AK: { name: 'AKWA IBOM', zone: 'SOUTH SOUTH', centre: [7.85, 5.0] },

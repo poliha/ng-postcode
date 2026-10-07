@@ -44,6 +44,21 @@ const SAMPLES: { method: string, url: string, key?: string, body?: unknown }[] =
   { method: 'POST', url: '/v1/assembly/assemble', body: { state: 'ek' } },
   { method: 'GET', url: '/v1/assembly/disassemble?code=EK01A03FK01' },
   { method: 'GET', url: '/v1/assembly/disassemble?code=nope' },
+  { method: 'GET', url: '/v1/lookup?code=FC-01-A01-KP-27&level=5', key: 'nipost_test_mock' },
+  { method: 'GET', url: '/v1/lookup?code=LA-11-W06-TC-10&level=5', key: 'nipost_test_mock' },
+  { method: 'GET', url: '/v1/search/autocomplete?q=FC', key: 'nipost_test_mock' },
+  { method: 'GET', url: '/v1/reference/states' },
+  { method: 'GET', url: '/v1/reference/states', key: RESERVED_KEYS.invalid },
+  { method: 'GET', url: '/v1/reference/states', key: RESERVED_KEYS.rateLimited },
+  { method: 'GET', url: '/v1/reference/lgas?state=EK' },
+  { method: 'GET', url: '/v1/reference/lgas?state=ZZ' },
+  { method: 'GET', url: '/v1/reference/lgas' },
+  { method: 'GET', url: '/v1/reference/districts?state=FC&lga=01' },
+  { method: 'GET', url: '/v1/reference/districts?state=FC&lga=99' },
+  { method: 'GET', url: '/v1/reference/districts?state=FC' },
+  { method: 'GET', url: '/v1/reference/areas?state=FC&lga=01&district=A01' },
+  { method: 'GET', url: '/v1/reference/areas?state=FC&lga=01&district=Z00' },
+  { method: 'GET', url: '/v1/reference/areas?state=FC&lga=01' },
 ]
 
 describe('the mock matches its own spec', () => {
@@ -63,15 +78,17 @@ describe('the mock matches its own spec', () => {
   it('documents every route the mock serves, and only those', () => {
     expect(Object.keys(spec.paths).sort()).toEqual([
       '/v1/assembly/assemble', '/v1/assembly/disassemble', '/v1/lookup',
+      '/v1/reference/areas', '/v1/reference/districts', '/v1/reference/lgas', '/v1/reference/states',
       '/v1/search/autocomplete', '/v1/search/nearby', '/v1/search/reverse',
     ])
   })
 
-  it('offers the key dropdown on every operation, listing every reserved key', () => {
+  it('offers the key dropdown on every operation, listing every reserved key and a sandbox key', () => {
     const keys = spec.components.parameters.ApiKey.schema.enum
     expect(keys).toEqual([
       'mock_level_1', 'mock_level_2', 'mock_level_3', 'mock_level_4', 'mock_level_5',
       RESERVED_KEYS.noCredits, RESERVED_KEYS.noScope, RESERVED_KEYS.rateLimited, RESERVED_KEYS.invalid, RESERVED_KEYS.noKey,
+      'nipost_test_mock',
     ])
     for (const [path, operations] of Object.entries<Record<string, { parameters?: { $ref?: string }[] }>>(spec.paths)) {
       for (const [method, operation] of Object.entries(operations)) {
@@ -93,6 +110,13 @@ describe('the mock matches its own spec', () => {
     for (const key of spec.components.parameters.ApiKey.schema.enum.filter((k: string) => k !== 'mock_level_5')) {
       expect(lookup(key), key).not.toEqual(open)
     }
+  })
+
+  it('documents the sandbox postcodes, the 403 code and the 11 known states', () => {
+    expect(spec.info.description).toContain('FC-01-A01-KP-27')
+    expect(spec.info.description).toContain('`level_not_granted`')
+    expect(spec.info.description).not.toContain('insufficient_scope')
+    expect(spec.paths['/v1/reference/states'].get.description).toMatch(/11 whose codes/)
   })
 
   it('names itself unofficial and points requests at the mock', () => {

@@ -4,23 +4,26 @@
 // Unofficial. Not affiliated with NIPOST or the Federal Ministry of Communications, Innovation
 // and Digital Economy.
 
-import { disassemble, format, parse, parsePartial, PostcodeFormatError, SEGMENT_ORDER, type Segments } from './format'
-import { NIGERIA_BBOX, TEST_POSTCODES } from './data'
+import {
+  disassemble, format, normaliseSegment, parse, parsePartial, PostcodeFormatError, SEGMENT_ORDER,
+  type SegmentName, type Segments,
+} from './format'
+import { KNOWN_STATES, NIGERIA_BBOX, SANDBOX_POSTCODES, TEST_POSTCODES } from './data'
 import { docsPage } from './docs'
-import { RATE_LIMIT, RESERVED_KEYS } from './keys'
+import { LIVE_KEY_PREFIX, RATE_LIMIT, RESERVED_KEYS, SANDBOX_KEY_PREFIX } from './keys'
 import { mockOpenApi } from './openapi'
 import {
   administrativeAddress, buildingUse, otherBuildingInfo, pointGeometry, postcodeAt, recentAddress,
-  round, stateName,
+  referenceAreas, referenceDistricts, referenceLgas, referenceStates, round, stateName,
 } from './synth'
 import type {
-  AssembleResponse, AutocompleteResponse, DisassembleResponse, LookupLevel, LookupResponse,
-  NearbyResponse, ReverseResponse,
+  AreasResponse, AssembleResponse, AutocompleteResponse, DisassembleResponse, DistrictsResponse,
+  LgasResponse, LookupLevel, LookupResponse, NearbyResponse, ReverseResponse, StatesResponse,
 } from './types'
 
-export { TEST_POSTCODES } from './data'
+export { SANDBOX_POSTCODES, TEST_POSTCODES } from './data'
 
-export { RATE_LIMIT, RESERVED_KEYS } from './keys'
+export { LIVE_KEY_PREFIX, RATE_LIMIT, RESERVED_KEYS, SANDBOX_KEY_PREFIX } from './keys'
 
 /** The spec clamps reverse search at 250m. Nearby has no published ceiling; the widget variant's 300m is used. */
 const REVERSE_MAX_M = 250
@@ -32,6 +35,7 @@ const AUTOCOMPLETE_LIMIT = 20
 const ROUTES = [
   '/v1/lookup', '/v1/assembly/assemble', '/v1/assembly/disassemble',
   '/v1/search/autocomplete', '/v1/search/reverse', '/v1/search/nearby',
+  '/v1/reference/states', '/v1/reference/lgas', '/v1/reference/districts', '/v1/reference/areas',
 ]
 
 export interface MockRequest {
@@ -100,11 +104,15 @@ interface Access {
   maxLevel: LookupLevel
   noCredits: boolean
   noScope: boolean
+  /** A sandbox key (`nipost_test_…`): only SANDBOX_POSTCODES resolve. */
+  sandbox: boolean
+  /** A live key (`nipost_live_…`): the sandbox postcodes do not resolve. */
+  live: boolean
 }
 
 /** Applies the reserved-key behaviours. Returns an error response, or the access the key grants. */
 const authorise = (key: string | undefined): MockResponse | Access => {
-  const access: Access = { maxLevel: 5, noCredits: false, noScope: false }
+  const access: Access = { maxLevel: 5, noCredits: false, noScope: false, sandbox: false, live: false }
   if (!key) {
     return access
   }
@@ -129,6 +137,12 @@ const authorise = (key: string | undefined): MockResponse | Access => {
   if (level) {
     return { ...access, maxLevel: Number(level) as LookupLevel }
   }
+  if (key.startsWith(SANDBOX_KEY_PREFIX)) {
+    return { ...access, sandbox: true }
+  }
+  if (key.startsWith(LIVE_KEY_PREFIX)) {
+    return { ...access, live: true }
+  }
   return access
 }
 
@@ -147,7 +161,11 @@ const lookup = (params: URLSearchParams, access: Access): MockResponse => {
   }
   const requested = Number(levelParam) as LookupLevel
   if (requested >= 2 && access.noScope) {
-    return fail({ status: 403, code: 'insufficient_scope', message: 'this key lacks the lookup scope (mock: reserved key mock_no_scope)' })
+    return fail({
+      status: 403,
+      code: 'level_not_granted',
+      message: `lookup level ${requested} has not been granted to this organisation (mock: reserved key mock_no_scope)`,
+    })
   }
   if (requested >= 2 && access.noCredits) {
     return fail({ status: 402, code: 'insufficient_credits', message: 'not enough credits; top up to continue' })
@@ -157,6 +175,12 @@ const lookup = (params: URLSearchParams, access: Access): MockResponse => {
   const parsed = parse(code)
   if (!parsed) {
     return ok<LookupResponse>({ postcode: code, valid: false })
+  }
+  if (access.sandbox && !SANDBOX_POSTCODES.includes(parsed.postcode)) {
+    return ok<LookupResponse>({ postcode: parsed.postcode, valid: false })
+  }
+  if (access.live && SANDBOX_POSTCODES.includes(parsed.postcode)) {
+    return ok<LookupResponse>({ postcode: parsed.postcode, valid: false })
   }
   const data: LookupResponse = { postcode: parsed.postcode, valid: true }
   if (level >= 2) {
@@ -207,8 +231,10 @@ const disassembleRoute = (params: URLSearchParams): MockResponse => {
 }
 
 const TEST_SEGMENTS: Segments[] = TEST_POSTCODES.map(code => disassemble(code))
+const SANDBOX_SEGMENTS: Segments[] = SANDBOX_POSTCODES.map(code => disassemble(code))
 
-const autocomplete = (params: URLSearchParams): MockResponse => {
+/** Suggests from the postcodes the key can resolve: the sandbox ones for a sandbox key. */
+const autocomplete = (params: URLSearchParams, access: Access): MockResponse => {
   const q = params.get('q')
   if (q === null) {
     return badRequest('q is required')
@@ -219,8 +245,12 @@ const autocomplete = (params: URLSearchParams): MockResponse => {
   }
   const { complete, active, fragment } = partial
   const prefix = SEGMENT_ORDER.slice(0, SEGMENT_ORDER.indexOf(active))
+  let source = TEST_SEGMENTS
+  if (access.sandbox) {
+    source = SANDBOX_SEGMENTS
+  }
   const labels = new Map<string, string>()
-  for (const s of TEST_SEGMENTS) {
+  for (const s of source) {
     const matchesPrefix = prefix.every(name => s[name] === complete[name])
     const value = s[active]
     if (!matchesPrefix || !value.startsWith(fragment) || labels.has(value)) {
@@ -344,9 +374,68 @@ const nearby = (params: URLSearchParams): MockResponse => {
   return ok<NearbyResponse>({ results, radius_m: radius })
 }
 
+// Reference data. Free endpoints: no credits, no level, but the same key handling as the rest.
+
+const KNOWN_STATE_LIST = Object.keys(KNOWN_STATES).sort().join(', ')
+
+/**
+ * Reads and normalises one segment parameter (tolerant of case and a missing zero, like Assembly).
+ * The state must be one the mock knows, since /v1/reference/states lists only those.
+ */
+const segmentParams = (opts: { params: URLSearchParams, names: SegmentName[] }): Partial<Segments> | MockResponse => {
+  const out: Partial<Segments> = {}
+  for (const name of opts.names) {
+    const raw = opts.params.get(name)
+    if (raw === null || raw.trim() === '') {
+      return badRequest(`${name} is required`)
+    }
+    try {
+      out[name] = normaliseSegment(name, raw)
+    }
+    catch (err) {
+      if (err instanceof PostcodeFormatError) {
+        return badRequest(err.message)
+      }
+      throw err
+    }
+  }
+  if (out.state && !KNOWN_STATES[out.state]) {
+    return badRequest(`unknown state ${out.state}; the mock knows ${Object.keys(KNOWN_STATES).length} of NIPOST's 37 states: ${KNOWN_STATE_LIST}`)
+  }
+  return out
+}
+
+const statesRoute = (): MockResponse => {
+  return ok<StatesResponse>({ states: referenceStates() })
+}
+
+const lgasRoute = (params: URLSearchParams): MockResponse => {
+  const p = segmentParams({ params, names: ['state'] })
+  if (isError(p)) {
+    return p
+  }
+  return ok<LgasResponse>({ lgas: referenceLgas(p.state!) })
+}
+
+const districtsRoute = (params: URLSearchParams): MockResponse => {
+  const p = segmentParams({ params, names: ['state', 'lga'] })
+  if (isError(p)) {
+    return p
+  }
+  return ok<DistrictsResponse>({ districts: referenceDistricts({ state: p.state!, lga: p.lga! }) })
+}
+
+const areasRoute = (params: URLSearchParams): MockResponse => {
+  const p = segmentParams({ params, names: ['state', 'lga', 'district'] })
+  if (isError(p)) {
+    return p
+  }
+  return ok<AreasResponse>({ areas: referenceAreas({ state: p.state!, lga: p.lga!, district: p.district! }) })
+}
+
 const NOTICE = {
   name: 'ng-postcode mock of the NIPOST Postcode API',
-  notice: 'Unofficial. Not affiliated with NIPOST or the Federal Ministry of Communications, Innovation and Digital Economy. Responses follow the shapes in the public docs and OpenAPI spec; all data beyond the published test postcodes is mock data.',
+  notice: 'Unofficial. Not affiliated with NIPOST or the Federal Ministry of Communications, Innovation and Digital Economy. Responses follow the shapes in the public docs and OpenAPI spec; all data beyond the published postcodes and the 11 known state names is mock data.',
   real_api: 'https://api.postcode.gov.ng',
   docs: 'https://docs.postcode.gov.ng',
   source: 'https://github.com/poliha/ng-postcode',
@@ -354,6 +443,8 @@ const NOTICE = {
   openapi: '/openapi.json',
   reserved_keys: RESERVED_KEYS,
   test_postcodes: TEST_POSTCODES,
+  sandbox_key_prefix: SANDBOX_KEY_PREFIX,
+  sandbox_postcodes: SANDBOX_POSTCODES,
 }
 
 const toUrl = (url: string | URL): URL | null => {
@@ -405,11 +496,19 @@ export const handleRequest = (req: MockRequest): MockResponse => {
     case 'GET /v1/assembly/disassemble':
       return disassembleRoute(params)
     case 'GET /v1/search/autocomplete':
-      return autocomplete(params)
+      return autocomplete(params, access)
     case 'GET /v1/search/reverse':
       return reverse(params, access)
     case 'GET /v1/search/nearby':
       return nearby(params)
+    case 'GET /v1/reference/states':
+      return statesRoute()
+    case 'GET /v1/reference/lgas':
+      return lgasRoute(params)
+    case 'GET /v1/reference/districts':
+      return districtsRoute(params)
+    case 'GET /v1/reference/areas':
+      return areasRoute(params)
   }
   if (ROUTES.includes(path)) {
     return fail({ status: 405, code: 'method_not_allowed', message: `${method} is not supported on ${path}` })
