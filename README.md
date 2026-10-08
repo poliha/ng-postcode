@@ -1,8 +1,11 @@
 # ng-postcode
 
 Validate and format Nigerian postcodes offline, and mock the
-[NIPOST Postcode API](https://docs.postcode.gov.ng) so you can build and test an integration
-before your organisation account, KYB and API keys come through.
+[NIPOST Postcode API](https://docs.postcode.gov.ng) so you can try it without an account, trigger
+its error responses on demand, and test an integration without a network.
+
+A walkthrough of the postcode format, the API, NIPOST's test and live keys, and building against
+this mock: [Nigeria's Postcode API: How It Works and How to Test It](https://oliha.dev/articles/building-on-nigerias-postcode-api/).
 
 > **Unofficial.** Not affiliated with NIPOST or the Federal Ministry of Communications, Innovation
 > and Digital Economy. The mock follows the response shapes in NIPOST's public docs and OpenAPI
@@ -46,8 +49,9 @@ npx ng-postcode-mock          # http://127.0.0.1:8081, set PORT and HOST to chan
 
 ## Why this exists
 
-Every endpoint of the real API, apart from its health check, needs a key. A sandbox key (`nipost_test_…`) comes without KYB, but
-it resolves only five sandbox postcodes. A live key, which resolves real postcodes, needs an
+Every endpoint of the real API, apart from its health check, needs a key. A sandbox key
+(`nipost_test_…`) comes without KYB, but it reads a sandbox of public places, not the live
+postcode database. A live key, which resolves real postcodes, needs an
 organisation account, KYB documents and an access request. Lookup L2 to L5 then cost credits and
 need a granted access level, and the error responses are hard to trigger on purpose. This package
 lets you write and test that code today.
@@ -144,7 +148,8 @@ It is a fixed list in the code. The mock keeps no state.
 ### Sandbox keys
 
 NIPOST's sandbox keys start with `nipost_test_`, and the mock treats any key with that prefix the
-same way. Under a sandbox key only NIPOST's five sandbox postcodes resolve:
+same way. Under a sandbox key the mock resolves only the five sandbox postcodes NIPOST publishes
+(NIPOST's own sandbox holds more; autocomplete with a test key finds them):
 
 ```
 FC-01-A01-KP-27   FC-01-A01-LR-01   FC-01-A01-MH-01   FC-01-A01-MV-01   FC-01-A01-MW-01

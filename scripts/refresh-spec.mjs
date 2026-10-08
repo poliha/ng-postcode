@@ -11,7 +11,8 @@ if (!res.ok) {
 }
 const text = await res.text()
 const sha256 = createHash('sha256').update(text).digest('hex')
-const fetchedAt = new Date().toISOString().slice(0, 10)
+// The local date: toISOString() is UTC, which stamps an evening refresh in Canada with tomorrow.
+const fetchedAt = new Date().toLocaleDateString('en-CA')
 
 await writeFile(new URL('../spec/openapi.yaml', import.meta.url), text)
 await writeFile(

@@ -439,6 +439,7 @@ const NOTICE = {
   real_api: 'https://api.postcode.gov.ng',
   docs: 'https://docs.postcode.gov.ng',
   source: 'https://github.com/poliha/ng-postcode',
+  guide: 'https://oliha.dev/articles/building-on-nigerias-postcode-api/',
   try: '/v1/lookup?code=LA-11-W06-TC-10&level=3',
   openapi: '/openapi.json',
   reserved_keys: RESERVED_KEYS,

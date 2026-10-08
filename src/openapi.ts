@@ -74,7 +74,7 @@ Same paths, parameters and response shapes as the real API, built from its publi
 |---|---|
 ${KEY_BEHAVIOUR.map(row => `| \`${row.key}\` | ${row.behaviour} |`).join('\n')}
 
-**Sandbox keys.** NIPOST's sandbox keys start with \`${SANDBOX_KEY_PREFIX}\` and resolve only its five sandbox postcodes: ${SANDBOX_POSTCODES.map(code => `\`${code}\``).join(', ')}. Under such a key every other code, the sample postcodes included, comes back \`valid: false\`; lookups are free and never capped. A key starting \`nipost_live_\` behaves as above except that the sandbox postcodes come back \`valid: false\`, since NIPOST says they resolve only under a test key. Any other key, or none, behaves as above.
+**Sandbox keys.** NIPOST's sandbox keys start with \`${SANDBOX_KEY_PREFIX}\`. Under one, the mock resolves only the five sandbox postcodes NIPOST publishes (NIPOST's own sandbox holds more): ${SANDBOX_POSTCODES.map(code => `\`${code}\``).join(', ')}. Under such a key every other code, the sample postcodes included, comes back \`valid: false\`; lookups are free and never capped. A key starting \`nipost_live_\` behaves as above except that the sandbox postcodes come back \`valid: false\`, since NIPOST says they resolve only under a test key. Any other key, or none, behaves as above.
 
 Source and npm package: [github.com/poliha/ng-postcode](https://github.com/poliha/ng-postcode). To switch to the real API, use \`https://api.postcode.gov.ng\` with your own key.`
 
