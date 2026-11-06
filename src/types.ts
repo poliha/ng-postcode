@@ -24,6 +24,10 @@ export interface AdministrativeAddress {
 export interface LookupResponse {
   postcode: string
   valid: boolean
+  /** Why a postcode is not valid. Returned by the live gateway with `valid: false`; not in the spec. */
+  status?: 'invalid' | 'not_found' | 'restricted'
+  /** Returned by the live gateway with `valid: false`; not in the spec. */
+  verified?: boolean
   /** L2+ */
   administrative_address?: AdministrativeAddress
   /** L2+ */
@@ -86,7 +90,7 @@ export interface NamedCode {
   name?: string
 }
 
-/** GET /v1/reference/states. NIPOST lists all 37 states; the mock knows 11 of them. */
+/** GET /v1/reference/states. All 37 states, as NIPOST lists them. */
 export interface StatesResponse {
   states: NamedCode[]
 }

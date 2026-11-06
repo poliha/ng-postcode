@@ -53,7 +53,7 @@ describe('lookup', () => {
   })
 
   it('answers malformed codes with valid: false', () => {
-    expect(data('/v1/lookup?code=NOT-A-CODE')).toEqual({ postcode: 'NOT-A-CODE', valid: false })
+    expect(data('/v1/lookup?code=NOT-A-CODE')).toEqual({ postcode: 'NOT-A-CODE', valid: false, status: 'invalid', verified: false })
   })
 
   it.each(['6', '0', 'two', '0x2', '2e0', ' 2', ''])('rejects level=%j', (level) => {
@@ -109,15 +109,15 @@ describe('sandbox keys', () => {
 
   it('follow the data rules for published codes: real state, everything below it mock', () => {
     const d = data('/v1/lookup?code=FC-01-A01-KP-27&level=3', SANDBOX_KEY)
-    expect(d.administrative_address).toMatchObject({ state_name: 'FCT', lga_name: 'MOCK LGA 01' })
+    expect(d.administrative_address).toMatchObject({ state_name: 'FEDERAL CAPITAL TERRITORY', lga_name: 'MOCK LGA 01' })
     expect(d.recent_house_address.recent).toContain('MOCK')
   })
 
   it('resolve nothing else, the sample postcodes included', () => {
     for (const code of [...TEST_POSTCODES, 'FC-01-A01-KP-28', 'ZZ-01-A03-FK-01']) {
-      expect(data(`/v1/lookup?code=${code}&level=2`, SANDBOX_KEY), code).toEqual({ postcode: code, valid: false })
+      expect(data(`/v1/lookup?code=${code}&level=2`, SANDBOX_KEY), code).toEqual({ postcode: code, valid: false, status: 'not_found', verified: false })
     }
-    expect(data('/v1/lookup?code=NOT-A-CODE', SANDBOX_KEY)).toEqual({ postcode: 'NOT-A-CODE', valid: false })
+    expect(data('/v1/lookup?code=NOT-A-CODE', SANDBOX_KEY)).toEqual({ postcode: 'NOT-A-CODE', valid: false, status: 'invalid', verified: false })
   })
 
   it('accept the sandbox postcodes in any style', () => {
@@ -131,14 +131,14 @@ describe('sandbox keys', () => {
   })
 
   it('autocomplete from the sandbox postcodes only', () => {
-    expect(data('/v1/search/autocomplete?q=', SANDBOX_KEY).suggestions).toEqual([{ code: 'FC', label: 'FC (FCT)' }])
-    expect(data('/v1/search/autocomplete?q=FC01A01', SANDBOX_KEY).suggestions.map((s: { code: string }) => s.code))
+    expect(data('/v1/search/autocomplete?q=', SANDBOX_KEY).suggestions).toEqual([{ code: 'FC', label: 'FC (FEDERAL CAPITAL TERRITORY)' }])
+    expect(data('/v1/search/autocomplete?q=FC-01-A01-', SANDBOX_KEY).suggestions.map((s: { code: string }) => s.code))
       .toEqual(['KP', 'LR', 'MH', 'MV', 'MW'])
   })
 
   it('do not resolve under a live key', () => {
     for (const code of SANDBOX_POSTCODES) {
-      expect(data(`/v1/lookup?code=${code}&level=3`, 'nipost_live_abc'), code).toEqual({ postcode: code, valid: false })
+      expect(data(`/v1/lookup?code=${code}&level=3`, 'nipost_live_abc'), code).toEqual({ postcode: code, valid: false, status: 'not_found', verified: false })
     }
     expect(data('/v1/lookup?code=LA-11-W06-TC-10', 'nipost_live_abc')).toEqual({ postcode: 'LA-11-W06-TC-10', valid: true })
   })
@@ -165,13 +165,19 @@ describe('sandbox keys', () => {
 describe('reference data', () => {
   const PUBLISHED = [...TEST_POSTCODES, ...SANDBOX_POSTCODES].map(code => parse(code)!)
 
-  it('lists the 11 known states, sorted, with their real names', () => {
+  it('lists all 37 states, sorted, named as NIPOST\'s reference endpoint names them', () => {
     const states = data('/v1/reference/states').states
-    expect(states).toHaveLength(11)
-    expect(states.map((s: { code: string }) => s.code)).toEqual(['AK', 'BA', 'EB', 'EK', 'EN', 'FC', 'JI', 'KN', 'LA', 'NI', 'OG'])
+    expect(states).toHaveLength(37)
+    expect(states[0]).toEqual({ code: 'AB', name: 'Abia' })
+    expect(states).toContainEqual({ code: 'FC', name: 'Federal Capital Territory' })
+    expect(states.map((s: { code: string }) => s.code)).toEqual([...states.map((s: { code: string }) => s.code)].sort())
     for (const s of states) {
       expect(s.name).toBe(KNOWN_STATES[s.code]!.name)
     }
+  })
+
+  it('gives lookups the state name in capitals', () => {
+    expect(data('/v1/lookup?code=KD-01-A01-AA-01&level=2').administrative_address.state_name).toBe('KADUNA')
   })
 
   it('lists LGAs 01 to 40, named as lookups name them', () => {
@@ -232,7 +238,6 @@ describe('reference data', () => {
     '/v1/reference/lgas',
     '/v1/reference/lgas?state=',
     '/v1/reference/lgas?state=ZZ',
-    '/v1/reference/lgas?state=KD',
     '/v1/reference/lgas?state=LAG',
     '/v1/reference/districts?state=LA',
     '/v1/reference/districts?lga=11',
@@ -248,8 +253,8 @@ describe('reference data', () => {
     expect(res.body).toMatchObject({ error: { code: 'invalid_request' }, mock: true })
   })
 
-  it('names the known states when it rejects an unknown one', () => {
-    expect((get('/v1/reference/lgas?state=KD').body as { error: { message: string } }).error.message).toMatch(/11 of NIPOST's 37/)
+  it('names the states when it rejects an unknown one', () => {
+    expect((get('/v1/reference/lgas?state=ZZ').body as { error: { message: string } }).error.message).toMatch(/NIPOST's 37 states are AB, AD/)
   })
 
   it('applies the same key handling as the other free endpoints, and never charges', () => {
@@ -287,9 +292,19 @@ describe('assembly', () => {
 
 describe('autocomplete', () => {
   it('suggests the active segment from the test postcodes', () => {
-    const d = data('/v1/search/autocomplete?q=EK01')
+    const d = data('/v1/search/autocomplete?q=EK01A')
     expect(d.segment).toBe('district')
     expect(d.suggestions).toEqual([{ code: 'A03', label: 'EK 01 A03' }])
+  })
+
+  it('keeps a segment typed in full as the active one until a separator, as NIPOST does', () => {
+    expect(data('/v1/search/autocomplete?q=FC').segment).toBe('state')
+    expect(data('/v1/search/autocomplete?q=EK01')).toEqual({ segment: 'lga', suggestions: [{ code: '01', label: 'EK 01' }] })
+    expect(data('/v1/search/autocomplete?q=EK%2001').segment).toBe('lga')
+    expect(data('/v1/search/autocomplete?q=EK01A03').segment).toBe('district')
+    expect(data('/v1/search/autocomplete?q=EK01A03F').segment).toBe('area')
+    expect(data('/v1/search/autocomplete?q=EK%2001%20').segment).toBe('district')
+    expect(data('/v1/search/autocomplete?q=EK-01-').suggestions).toEqual([{ code: 'A03', label: 'EK 01 A03' }])
   })
 
   it('labels states with their names', () => {

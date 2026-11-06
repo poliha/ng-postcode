@@ -174,13 +174,13 @@ const lookup = (params: URLSearchParams, access: Access): MockResponse => {
 
   const parsed = parse(code)
   if (!parsed) {
-    return ok<LookupResponse>({ postcode: code, valid: false })
+    return ok<LookupResponse>({ postcode: code, valid: false, status: 'invalid', verified: false })
   }
   if (access.sandbox && !SANDBOX_POSTCODES.includes(parsed.postcode)) {
-    return ok<LookupResponse>({ postcode: parsed.postcode, valid: false })
+    return ok<LookupResponse>({ postcode: parsed.postcode, valid: false, status: 'not_found', verified: false })
   }
   if (access.live && SANDBOX_POSTCODES.includes(parsed.postcode)) {
-    return ok<LookupResponse>({ postcode: parsed.postcode, valid: false })
+    return ok<LookupResponse>({ postcode: parsed.postcode, valid: false, status: 'not_found', verified: false })
   }
   const data: LookupResponse = { postcode: parsed.postcode, valid: true }
   if (level >= 2) {
@@ -243,7 +243,16 @@ const autocomplete = (params: URLSearchParams, access: Access): MockResponse => 
   if (!partial) {
     return badRequest('q is not the start of a postcode')
   }
-  const { complete, active, fragment } = partial
+  let { complete, active, fragment } = partial
+  // NIPOST names a segment typed to its full length as the active one (`FC` is still the state)
+  // until a separator or the next character moves on; parsePartial has already moved on.
+  const last = SEGMENT_ORDER[SEGMENT_ORDER.indexOf(active) - 1]
+  if (fragment === '' && last && complete[last] && !/[\s-]$/.test(q)) {
+    fragment = complete[last]
+    complete = { ...complete }
+    delete complete[last]
+    active = last
+  }
   const prefix = SEGMENT_ORDER.slice(0, SEGMENT_ORDER.indexOf(active))
   let source = TEST_SEGMENTS
   if (access.sandbox) {
@@ -400,7 +409,7 @@ const segmentParams = (opts: { params: URLSearchParams, names: SegmentName[] }):
     }
   }
   if (out.state && !KNOWN_STATES[out.state]) {
-    return badRequest(`unknown state ${out.state}; the mock knows ${Object.keys(KNOWN_STATES).length} of NIPOST's 37 states: ${KNOWN_STATE_LIST}`)
+    return badRequest(`unknown state ${out.state}; NIPOST's ${Object.keys(KNOWN_STATES).length} states are ${KNOWN_STATE_LIST}`)
   }
   return out
 }
@@ -435,7 +444,7 @@ const areasRoute = (params: URLSearchParams): MockResponse => {
 
 const NOTICE = {
   name: 'ng-postcode mock of the NIPOST Postcode API',
-  notice: 'Unofficial. Not affiliated with NIPOST or the Federal Ministry of Communications, Innovation and Digital Economy. Responses follow the shapes in the public docs and OpenAPI spec; all data beyond the published postcodes and the 11 known state names is mock data.',
+  notice: 'Unofficial. Not affiliated with NIPOST or the Federal Ministry of Communications, Innovation and Digital Economy. Responses follow the shapes in the public docs and OpenAPI spec; all data beyond the published postcodes and the 37 state names is mock data.',
   real_api: 'https://api.postcode.gov.ng',
   docs: 'https://docs.postcode.gov.ng',
   source: 'https://github.com/poliha/ng-postcode',

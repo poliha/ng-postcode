@@ -112,11 +112,11 @@ describe('the mock matches its own spec', () => {
     }
   })
 
-  it('documents the sandbox postcodes, the 403 code and the 11 known states', () => {
+  it('documents the sandbox postcodes, the 403 code and the 37 states', () => {
     expect(spec.info.description).toContain('FC-01-A01-KP-27')
     expect(spec.info.description).toContain('`level_not_granted`')
     expect(spec.info.description).not.toContain('insufficient_scope')
-    expect(spec.paths['/v1/reference/states'].get.description).toMatch(/11 whose codes/)
+    expect(spec.paths['/v1/reference/states'].get.description).toMatch(/All 37 states/)
   })
 
   it('names itself unofficial and points requests at the mock', () => {

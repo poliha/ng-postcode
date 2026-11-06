@@ -92,7 +92,7 @@ export const mockOpenApi = () => {
       { name: 'Lookup' },
       { name: 'Search' },
       { name: 'Assembly', description: 'Build and parse postcodes. The same rules work offline with the `ng-postcode` package.' },
-      { name: 'Reference', description: `States, LGAs, districts and areas, for building pickers. Free, no credits. The mock knows ${KNOWN_STATE_COUNT} of NIPOST's 37 states; LGA names are mock data, and districts and areas are generated codes.` },
+      { name: 'Reference', description: `States, LGAs, districts and areas, for building pickers. Free, no credits. All ${KNOWN_STATE_COUNT} of NIPOST's states with their real names; LGA names are mock data, and districts and areas are generated codes.` },
     ],
     paths: {
       '/v1/lookup': {
@@ -170,7 +170,7 @@ export const mockOpenApi = () => {
         get: {
           tags: ['Reference'],
           summary: 'List states',
-          description: `NIPOST lists all 37 states. The mock lists the ${KNOWN_STATE_COUNT} whose codes NIPOST has published, with their real names.`,
+          description: `All ${KNOWN_STATE_COUNT} states, with the codes and names NIPOST's reference endpoint returns.`,
           parameters: [API_KEY_PARAM],
           responses: {
             200: okResponse(namedCodes('states'), `The ${KNOWN_STATE_COUNT} states the mock knows (code and name)`),
@@ -300,6 +300,8 @@ export const mockOpenApi = () => {
           properties: {
             postcode: { type: 'string' },
             valid: { type: 'boolean' },
+            status: { type: 'string', enum: ['invalid', 'not_found', 'restricted'], description: 'With `valid: false`: why. Seen on the live gateway, not in NIPOST\'s spec.' },
+            verified: { type: 'boolean', description: 'With `valid: false`. Seen on the live gateway, not in NIPOST\'s spec.' },
             administrative_address: {
               type: 'object',
               description: 'L2+',

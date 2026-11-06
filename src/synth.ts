@@ -34,10 +34,11 @@ export const round = (n: number, places: number): number => {
   return Math.round(n * f) / f
 }
 
+/** The state's name as lookups give it, in capitals. */
 export const stateName = (state: string): string => {
   const known = KNOWN_STATES[state]
   if (known) {
-    return known.name
+    return known.name.toUpperCase()
   }
   return `MOCK STATE ${state}`
 }
@@ -148,9 +149,9 @@ const mockList = (opts: { seed: string, make: (h: number) => string, published: 
   return [...values].sort()
 }
 
-/** The known states, by code, with their real names. */
+/** NIPOST's 37 states, by code, named as the reference endpoint names them. */
 export const referenceStates = (): NamedCode[] => {
-  return Object.keys(KNOWN_STATES).sort().map(code => ({ code, name: stateName(code) }))
+  return Object.keys(KNOWN_STATES).sort().map(code => ({ code, name: KNOWN_STATES[code]!.name }))
 }
 
 /** LGAs 01 to 40 of a state, named as lookups name them. */

@@ -1,6 +1,6 @@
 {
   "name": "ng-postcode",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Validate and format Nigerian postcodes offline, and mock the NIPOST Postcode API for development and tests. Unofficial.",
   "keywords": [
     "nigeria",

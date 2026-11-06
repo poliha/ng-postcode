@@ -64,6 +64,20 @@ Where NIPOST's docs and API disagree, checked on 2026-10-06:
 | Lookup levels | The Lookup levels page now shows L1 to L5, matching the spec. | Resolved. It showed L1 to L3 on 2026-10-01. |
 | Postcode length | The docs index and the postcode format page say 12 characters; NIPOST's landing page and FAQ say 11. The segments add up to 11 (`EK01A03FK01`). | Open |
 
+Checked against the live gateway with a test key on 2026-11-06:
+
+- Assembly, disassembly, the reference endpoints, the `level_not_granted` 403 and the rate-limit
+  headers match the mock.
+- A lookup that does not resolve returns `status` (`invalid` or `not_found`) and `verified: false`
+  beside `valid: false`. The spec does not list either field; the mock now returns both. Whether a
+  valid lookup carries them is not yet known.
+- Autocomplete names a segment typed in full as the active one (`FC` is `state`, `FC01` is `lga`)
+  until a separator or the next character moves on. The mock now does the same.
+- A new test key was granted lookup level 1 only; level 2 and up returned `403 level_not_granted`.
+  The mock leaves every level open to sandbox keys, so you can see each shape.
+- None of the five documented sandbox postcodes resolved under that test key, and autocomplete
+  returned no suggestions.
+
 ## Install
 
 ```bash
@@ -174,11 +188,10 @@ The docs page offers `nipost_test_mock` in its dropdown.
   worked example `EK-01-A03-FK-01`. Autocomplete suggests from these.
 - **Sandbox postcodes** are the five NIPOST publishes for sandbox keys. NIPOST describes each only
   as a public building in the FCT, so the mock gives them the same mock data as any other code.
-- **State names and zones** are real for 11 states: the 20 sample postcodes cover 10 (AK, BA, EB,
-  EN, FC, JI, KN, LA, NI and OG) and the quickstart's example adds EK. NIPOST has 37 states. Other
-  well-formed state codes return `MOCK STATE XX`.
-- **Reference data** (`/v1/reference/*`): `states` lists the 11 states the mock knows, with their
-  real names; NIPOST's lists all 37. Each known state has LGAs `01` to `40`, named `MOCK LGA NN` as
+- **State codes and names** are NIPOST's 37, as its reference endpoint returns them (read
+  2026-11-06). Lookups give the name in capitals, as the quickstart does (`EKITI`). Zones are the
+  geopolitical zones. Other well-formed state codes return `MOCK STATE XX`.
+- **Reference data** (`/v1/reference/*`): `states` lists all 37. Each state has LGAs `01` to `40`, named `MOCK LGA NN` as
   lookups name them (except `EK-01`, ADO EKITI, which NIPOST's docs give). Districts and areas are
   generated codes, the same on every call, and always include the segments of the published
   postcodes. An unknown state is a `400`; an LGA or district the mock does not list gives an empty
@@ -189,7 +202,7 @@ The docs page offers `nipost_test_mock` in its dropdown.
 - **L5 coordinates** are a random point near the centre of the postcode's state, marked
   `"mock": true` inside the GeoJSON. They are not the building's location.
 - **Reverse and nearby search** return random well-formed postcodes. The state is the nearest of
-  the 11 known states to the coordinate; everything below the state is random. `nearby` clamps its
+  the 37 states (by a rough centre point) to the coordinate; everything below the state is random. `nearby` clamps its
   radius at 300m, the ceiling NIPOST documents for the widget's nearby search.
 - **Guessed shapes**, because NIPOST has not published them: the inner fields of L4
   `other_building_info`, L5 `point_geometry` (a GeoJSON Point here), the whole `/v1/search/nearby`

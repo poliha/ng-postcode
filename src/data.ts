@@ -46,23 +46,48 @@ export const SANDBOX_POSTCODES: readonly string[] = [
 export type Zone = 'NORTH CENTRAL' | 'NORTH EAST' | 'NORTH WEST' | 'SOUTH EAST' | 'SOUTH SOUTH' | 'SOUTH WEST'
 
 /**
- * The 11 state codes confirmed by NIPOST's docs (each appears in a published postcode), with the
- * state name, geopolitical zone and a rough centre point as [lng, lat]. Other two-letter codes are
- * well-formed but unconfirmed, so the mock answers for them with clearly labelled placeholders.
- * NIPOST has 37 states; the mock knows only these.
+ * NIPOST's 37 state codes and names, as `/v1/reference/states` returns them (read with a test key on
+ * 2026-11-06), with the geopolitical zone and a rough centre point as [lng, lat]. Lookups give the
+ * name in capitals (`EKITI` in the quickstart); the reference endpoint gives it as written here.
  */
 export const KNOWN_STATES: Readonly<Record<string, { name: string, zone: Zone, centre: [number, number] }>> = {
-  AK: { name: 'AKWA IBOM', zone: 'SOUTH SOUTH', centre: [7.85, 5.0] },
-  BA: { name: 'BAUCHI', zone: 'NORTH EAST', centre: [9.95, 10.5] },
-  EB: { name: 'EBONYI', zone: 'SOUTH EAST', centre: [8.05, 6.25] },
-  EK: { name: 'EKITI', zone: 'SOUTH WEST', centre: [5.3, 7.7] },
-  EN: { name: 'ENUGU', zone: 'SOUTH EAST', centre: [7.4, 6.55] },
-  FC: { name: 'FCT', zone: 'NORTH CENTRAL', centre: [7.2, 8.85] },
-  JI: { name: 'JIGAWA', zone: 'NORTH WEST', centre: [9.55, 12.2] },
-  KN: { name: 'KANO', zone: 'NORTH WEST', centre: [8.5, 11.8] },
-  LA: { name: 'LAGOS', zone: 'SOUTH WEST', centre: [3.6, 6.5] },
-  NI: { name: 'NIGER', zone: 'NORTH CENTRAL', centre: [5.6, 9.95] },
-  OG: { name: 'OGUN', zone: 'SOUTH WEST', centre: [3.45, 7.0] },
+  AB: { name: 'Abia', zone: 'SOUTH EAST', centre: [7.5, 5.45] },
+  AD: { name: 'Adamawa', zone: 'NORTH EAST', centre: [12.4, 9.3] },
+  AK: { name: 'Akwa Ibom', zone: 'SOUTH SOUTH', centre: [7.85, 5.0] },
+  AN: { name: 'Anambra', zone: 'SOUTH EAST', centre: [6.95, 6.2] },
+  BA: { name: 'Bauchi', zone: 'NORTH EAST', centre: [9.95, 10.5] },
+  BE: { name: 'Benue', zone: 'NORTH CENTRAL', centre: [8.75, 7.35] },
+  BR: { name: 'Borno', zone: 'NORTH EAST', centre: [13.15, 11.85] },
+  BY: { name: 'Bayelsa', zone: 'SOUTH SOUTH', centre: [6.1, 4.75] },
+  CR: { name: 'Cross River', zone: 'SOUTH SOUTH', centre: [8.6, 5.85] },
+  DE: { name: 'Delta', zone: 'SOUTH SOUTH', centre: [6.0, 5.55] },
+  EB: { name: 'Ebonyi', zone: 'SOUTH EAST', centre: [8.05, 6.25] },
+  ED: { name: 'Edo', zone: 'SOUTH SOUTH', centre: [6.0, 6.6] },
+  EK: { name: 'Ekiti', zone: 'SOUTH WEST', centre: [5.3, 7.7] },
+  EN: { name: 'Enugu', zone: 'SOUTH EAST', centre: [7.4, 6.55] },
+  FC: { name: 'Federal Capital Territory', zone: 'NORTH CENTRAL', centre: [7.2, 8.85] },
+  GM: { name: 'Gombe', zone: 'NORTH EAST', centre: [11.15, 10.35] },
+  IM: { name: 'Imo', zone: 'SOUTH EAST', centre: [7.05, 5.5] },
+  JI: { name: 'Jigawa', zone: 'NORTH WEST', centre: [9.55, 12.2] },
+  KD: { name: 'Kaduna', zone: 'NORTH WEST', centre: [7.7, 10.4] },
+  KE: { name: 'Kebbi', zone: 'NORTH WEST', centre: [4.2, 11.6] },
+  KG: { name: 'Kogi', zone: 'NORTH CENTRAL', centre: [6.6, 7.75] },
+  KN: { name: 'Kano', zone: 'NORTH WEST', centre: [8.5, 11.8] },
+  KT: { name: 'Katsina', zone: 'NORTH WEST', centre: [7.6, 12.3] },
+  KW: { name: 'Kwara', zone: 'NORTH CENTRAL', centre: [4.6, 8.95] },
+  LA: { name: 'Lagos', zone: 'SOUTH WEST', centre: [3.6, 6.5] },
+  NA: { name: 'Nasarawa', zone: 'NORTH CENTRAL', centre: [8.3, 8.5] },
+  NI: { name: 'Niger', zone: 'NORTH CENTRAL', centre: [5.6, 9.95] },
+  OG: { name: 'Ogun', zone: 'SOUTH WEST', centre: [3.45, 7.0] },
+  ON: { name: 'Ondo', zone: 'SOUTH WEST', centre: [5.05, 7.0] },
+  OS: { name: 'Osun', zone: 'SOUTH WEST', centre: [4.55, 7.55] },
+  OY: { name: 'Oyo', zone: 'SOUTH WEST', centre: [3.6, 8.15] },
+  PL: { name: 'Plateau', zone: 'NORTH CENTRAL', centre: [9.5, 9.2] },
+  RI: { name: 'Rivers', zone: 'SOUTH SOUTH', centre: [6.9, 4.85] },
+  SK: { name: 'Sokoto', zone: 'NORTH WEST', centre: [5.25, 13.05] },
+  TA: { name: 'Taraba', zone: 'NORTH EAST', centre: [10.8, 8.0] },
+  YB: { name: 'Yobe', zone: 'NORTH EAST', centre: [11.5, 12.3] },
+  ZA: { name: 'Zamfara', zone: 'NORTH WEST', centre: [6.2, 12.15] },
 }
 
 /** LGA names confirmed by NIPOST's docs, keyed by `STATE-LGA`. */

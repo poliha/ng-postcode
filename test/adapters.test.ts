@@ -37,10 +37,10 @@ describe('HTTP server', () => {
     expect(lookup.administrative_address?.state_name).toBe('LAGOS')
     expect(assembled.postcode).toBe('EK-01-A03-FK-01')
     expect(segments.district).toBe('A03')
-    expect(suggestions.segment).toBe('district')
+    expect(suggestions.segment).toBe('lga')
     expect(reversed.radius_m).toBe(250)
     expect(nearby.radius_m).toBe(300)
-    expect(states.states).toHaveLength(11)
+    expect(states.states).toHaveLength(37)
     expect(lgas.lgas[0]).toEqual({ code: '01', name: 'ADO EKITI' })
     expect(districts.districts).toContainEqual({ code: 'A01' })
     expect(areas.areas).toContainEqual({ code: 'KP' })
@@ -110,7 +110,7 @@ describe('MSW handlers', () => {
     const sandbox = await api.lookup('FC-01-A01-MH-01', 5)
     const sample = await api.lookup('KN-31-F82-WJ-80', 5)
     expect(sandbox.valid).toBe(true)
-    expect(sample).toEqual({ postcode: 'KN-31-F82-WJ-80', valid: false })
+    expect(sample).toEqual({ postcode: 'KN-31-F82-WJ-80', valid: false, status: 'not_found', verified: false })
   })
 
   it('answers the reference endpoints', async () => {
